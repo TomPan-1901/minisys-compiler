@@ -1,0 +1,16 @@
+/node_modules/
+/build/
+package-lock.json
+/.vscode/
+/**/*.exe
+/**/*.o
+/**/yy.seulex.c
+/**/yy.seuyacc.c
+/**/yy.tab.h
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+### VS Code ###
+.vscode/
