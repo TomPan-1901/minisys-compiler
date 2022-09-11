@@ -11,6 +11,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@datastructures-js/deque": "^1.0.4",
+    "@datastructures-js/priority-queue": "^6.1.3",
+    "@datastructures-js/queue": "^4.2.3",
     "@types/jest": "^29.0.0",
     "@typescript-eslint/eslint-plugin": "^5.36.2",
     "eslint": "^8.22.0",
