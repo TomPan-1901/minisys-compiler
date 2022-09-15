@@ -1,7 +1,5 @@
-type RegToken = {
-  token: string,
-  tokenType: 'operand' /*操作数*/ | 'operator' /*操作符*/
-}
+import { RegToken } from './RegToken'
+import { constructNFA } from './NFA'
 let handleQuote = (regDef: Map<string, string>): Map<string, string> => {
   const escapeChars = new Set<string>(['.', '|', '*', '(', ')', '+', '?', '{', '}', '[', ']'])
   regDef.forEach((value, key, map) => {
@@ -317,6 +315,7 @@ let transformToSuffixReg = (infixRegDef: Map<string, RegToken[]>): Map<string, R
   }
   return ans
 }
+
 export let parseLex = (lexContent: string) => {
   let length = lexContent.length
   let preDeclare: string[] = []
@@ -457,7 +456,8 @@ export let parseLex = (lexContent: string) => {
   actions.forEach((value, key) => {
     infixRegDefsWithAction.set(key, standardRegExp.get(key) as RegToken[])
   })
-  let result = transformToSuffixReg(infixRegDefsWithAction)
+  let suffixRegDef = transformToSuffixReg(infixRegDefsWithAction)
+  let result = constructNFA(suffixRegDef)
   return [preDeclare, regDef, postDeclare]
   // console.log(preDeclare)
   // console.log(regDef)
