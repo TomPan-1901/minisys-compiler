@@ -16,7 +16,7 @@ let handleQuote = (regDef: Map<string, string>): Map<string, string> => {
           continue
         }
       }
-      else if (inBracket && !inQuote){
+      else if (inBracket && !inQuote) {
         if (value[i] === ']') {
           inBracket = false
         }
@@ -166,7 +166,7 @@ let transformToStandardRegExp = (regDef: Map<string, string>): Map<string, RegTo
         }
         else {
           if (value[idx] === '\\') {
-            curAns.push({ token: value[idx + 1], tokenType: 'operand'})
+            curAns.push({ token: value[idx + 1], tokenType: 'operand' })
             idx += 2
             continue
           }
@@ -178,7 +178,7 @@ let transformToStandardRegExp = (regDef: Map<string, string>): Map<string, RegTo
       else {
         if (value[idx] === ']') {
           inBracket = false
-          curAns.push({ token: ')', tokenType: 'operator'})
+          curAns.push({ token: ')', tokenType: 'operator' })
         }
         else {
           if (value[idx] === '\\') {
@@ -200,8 +200,8 @@ let transformToStandardRegExp = (regDef: Map<string, string>): Map<string, RegTo
             }
             else {
               if (value[idx] === '-' &&
-              idx + 1 < value.length &&
-              value[idx + 1] !== ']'
+                idx + 1 < value.length &&
+                value[idx + 1] !== ']'
               ) {
                 let start = value[idx - 1]
                 let stop = value[idx + 1]
@@ -210,14 +210,14 @@ let transformToStandardRegExp = (regDef: Map<string, string>): Map<string, RegTo
                 }
                 for (let i = start.charCodeAt(0) + 1; i <= stop.charCodeAt(0); i++) {
                   curAns.push({ token: '|', tokenType: 'operator' })
-                  curAns.push({ token: String.fromCharCode(i), tokenType: 'operand'})
+                  curAns.push({ token: String.fromCharCode(i), tokenType: 'operand' })
                 }
                 idx += 2
                 continue
               }
               else {
                 curAns.push({ token: '|', tokenType: 'operator' })
-                curAns.push({ token: value[idx], tokenType: 'operand'})
+                curAns.push({ token: value[idx], tokenType: 'operand' })
               }
             }
           }
@@ -225,17 +225,33 @@ let transformToStandardRegExp = (regDef: Map<string, string>): Map<string, RegTo
       }
       idx++
     }
-    // TODO: 加点
+    /**
+     * 以下情况时后面不加点：
+     * 当前字符为定义的转义字符
+     * 当前字符为非转义的(和|
+     * 当前字符为正规表达式最后一个字符
+     * 当前字符的后一个字符为|、)、*、+、?
+     */
     curAns = curAns.flatMap((value, index, array) => {
-      if (value.tokenType === 'operand' &&
-      index + 1 < array.length && (
-      array[index + 1].tokenType === 'operand' ||
-      array[index + 1].tokenType === 'operator' && array[index + 1].token === '('
-      )) {
-        return [value, { token: '.', tokenType: 'operator'} ]
+      if (index === array.length - 1) {
+        return value
       }
       else {
-        return value
+        if (
+          // 非转义的(和|
+          (value.tokenType === 'operator' && (value.token === '(' || value.token === '|')) ||
+          array[index + 1].tokenType === 'operator' &&
+          (array[index + 1].token === '|' ||
+            array[index + 1].token === ')' ||
+            array[index + 1].token === '+' ||
+            array[index + 1].token === '?' ||
+            array[index + 1].token === '*'
+          )
+        )
+          return value
+        else {
+          return [value, { token: '.', tokenType: 'operator' }]
+        }
       }
     })
     ans.set(key, curAns)
@@ -256,25 +272,50 @@ let transformToStandardRegExp = (regDef: Map<string, string>): Map<string, RegTo
 let transformToSuffixReg = (infixRegDef: Map<string, RegToken[]>): Map<string, RegToken[]> => {
   let ans: Map<string, RegToken[]> = new Map()
   const operatorPriority = {
-    '|': 0,
-    '.': 0,
-    '+': 1,
-    '*': 1,
-    '?': 1
+    '+': 0,
+    '*': 0,
+    '?': 0,
+    '.': 1,
+    '|': 2
   }
   for (let [k, v] of infixRegDef.entries()) {
-    let operandStack: RegToken[] = []
+    let curAns: RegToken[] = []
     let operatorStack: RegToken[] = []
+
     for (let i = 0; i < v.length; i++) {
       if (v[i].tokenType === 'operand') {
-        operandStack.push(v[i])
+        curAns.push(v[i])
       }
       else {
-
+        if (operatorStack.length === 0 ||
+          (v[i].tokenType === 'operator' && v[i].token === '(')
+        ) {
+          operatorStack.push(v[i])
+        }
+        else if (v[i].tokenType === 'operator' && v[i].token === ')') {
+          while (operatorStack[operatorStack.length - 1].token !== '(') {
+            curAns.push(operatorStack.pop() as RegToken)
+          }
+          operatorStack.pop()
+        }
+        else {
+          while (operatorStack.length > 0 &&
+            operatorStack[operatorStack.length - 1].token !== '(' &&
+            operatorPriority[operatorStack[operatorStack.length - 1].token as '+' | '*' | '?' | '.' | '|'] <= operatorPriority[v[i].token as '+' | '*' | '?' | '.' | '|']) {
+            curAns.push(operatorStack.pop() as RegToken)
+          }
+          operatorStack.push(v[i])
+        }
+      }
+      if (i === v.length - 1) {
+        while (operatorStack.length > 0) {
+          curAns.push(operatorStack.pop() as RegToken)
+        }
       }
     }
+    ans.set(k, curAns)
   }
-  return infixRegDef
+  return ans
 }
 export let parseLex = (lexContent: string) => {
   let length = lexContent.length
@@ -356,7 +397,7 @@ export let parseLex = (lexContent: string) => {
           let regKey = `__ACTION_REGDEF_${currentLine + 1}`
           let regPart = lexLines[currentLine].substring(0, currentChar)
           regDef.set(regKey, regPart)
-          
+
           while (currentChar < l && lexLines[currentLine][currentChar] !== '{')
             currentChar++
           stack.push(lexLines[currentLine][currentChar])
@@ -416,7 +457,7 @@ export let parseLex = (lexContent: string) => {
   actions.forEach((value, key) => {
     infixRegDefsWithAction.set(key, standardRegExp.get(key) as RegToken[])
   })
-  transformToSuffixReg(infixRegDefsWithAction)
+  let result = transformToSuffixReg(infixRegDefsWithAction)
   return [preDeclare, regDef, postDeclare]
   // console.log(preDeclare)
   // console.log(regDef)
