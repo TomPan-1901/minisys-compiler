@@ -1,5 +1,8 @@
 import { RegToken } from './RegToken'
-import { constructNFA } from './NFA'
+import { constructNFA, nfaToDFA } from './NFA'
+
+const ALLSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#%'()*+,-./:;<=>\?[\\]^{|}_ \n\t\v\f~&"
+
 let handleQuote = (regDef: Map<string, string>): Map<string, string> => {
   const escapeChars = new Set<string>(['.', '|', '*', '(', ')', '+', '?', '{', '}', '[', ']'])
   regDef.forEach((value, key, map) => {
@@ -190,6 +193,29 @@ let transformToStandardRegExp = (regDef: Map<string, string>): Map<string, RegTo
             }
             idx += 2
             continue
+          }
+          else if (value[idx] === '^') {
+            if (firstInBracket) {
+              let excludeSet: Set<string> = new Set()
+              idx++
+              while (idx < value.length && value[idx] !== ']') {
+                excludeSet.add(value[idx])
+                idx++
+              }
+              for (let char of ALLSET) {
+                if (!excludeSet.has(char)) {
+                  curAns.push({ token: char, tokenType: 'operand' })
+                  curAns.push({ token: '|', tokenType: 'operator' })
+                }
+              }
+              curAns.pop()
+              firstInBracket = false
+              continue
+            }
+            else {
+              curAns.push({ token: '|', tokenType: 'operator' })
+              curAns.push({ token: value[idx + 1], tokenType: 'operand' })
+            }
           }
           else {
             if (firstInBracket) {
@@ -458,6 +484,7 @@ export let parseLex = (lexContent: string) => {
   })
   let suffixRegDef = transformToSuffixReg(infixRegDefsWithAction)
   let result = constructNFA(suffixRegDef)
+  result = nfaToDFA(result)
   return [preDeclare, regDef, postDeclare]
   // console.log(preDeclare)
   // console.log(regDef)
