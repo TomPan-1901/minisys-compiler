@@ -1,6 +1,6 @@
 import { RegToken } from './RegToken'
-import { constructNFA, NFAState, nfaToDFA } from './NFA'
-import { visitNodes } from 'typescript'
+import { constructNFA, NFA, NFAState } from './NFA'
+import { DFA } from './DFA'
 
 const ALLSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#%'()*+,-./:;<=>\?[\\]^{|}_ \n\t\v\f~&"
 
@@ -486,8 +486,8 @@ export let parseLex = (lexContent: string) => {
     infixRegDefsWithAction.set(key, standardRegExp.get(key) as RegToken[])
   })
   let suffixRegDef = transformToSuffixReg(infixRegDefsWithAction)
-  let result = constructNFA(suffixRegDef)
-  let dfa = nfaToDFA(result, actionPriority)
+  let result = NFA.fromSuffixRegDef(suffixRegDef)
+  let dfa = DFA.fromNFA(result, actionPriority)
   return [preDeclare, regDef, postDeclare]
   // console.log(preDeclare)
   // console.log(regDef)
