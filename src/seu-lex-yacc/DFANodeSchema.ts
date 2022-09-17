@@ -2,7 +2,7 @@ export type DFANodeSchema = {
   id: number,
   action: string | null,
   acceptable: boolean,
-  edge: DFAEdgeSchema
+  edge: DFAEdgeSchema[]
 }
 
 export type DFAEdgeSchema = {

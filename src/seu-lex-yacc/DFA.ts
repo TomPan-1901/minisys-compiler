@@ -9,66 +9,106 @@ export class DFAState {
   private acceptable: boolean
   private action: string | null
 
-  constructor(edge: Map<string, DFAState>, acceptable: boolean, action: string | null) {
-    this.edge = edge
+  constructor(acceptable: boolean = false, action: string | null = null, edge: Map<string, DFAState> | null = null) {
     this.acceptable = acceptable
     this.action = action
+    if (edge !== null) {
+      this.edge = edge
+    }
+    else {
+      this.edge = new Map()
+    }
+  }
+
+  public setEdge(edge: Map<string, DFAState>): void {
+    this.edge = edge
+  }
+
+  public getEdge(): Map<string, DFAState> {
+    return this.edge
+  }
+
+  public setAcceptable(acceptable: boolean): void {
+    this.acceptable = acceptable
+  }
+
+  public getAcceptable(): boolean {
+    return this.acceptable
+  }
+
+  public getAction(): string | null {
+    return this.action
+  }
+
+  public setAction(action: string | null): void {
+    this.action = action 
+  }
+
+  public addEdge(char: string, state: DFAState): void {
+    // This shouldn't happen
+    if (this.edge.has(char)) {
+      throw new Error()
+    }
+    this.edge.set(char, state)
+  }
+
+  public static fromNFAStateList(stateList: NFAState[], actionPriority: Map<string, number>): DFAState {
+    let acceptable = stateList.find(value => value.getAcceptable() === true) !== undefined
+    let action = null
+    let curPriority = +Infinity
+    stateList.forEach(value => {
+      let a = value.getAction()
+      if (a !== null && (actionPriority.get(a) as number) < curPriority) {
+        action = a
+        curPriority = (actionPriority.get(a) as number)
+      }
+    })
+    console.log(`${acceptable}, ${action}`)
+    return new DFAState(acceptable, action)
   }
 }
 export class DFA {
-  private start: NFAState
+  private start: DFAState
 
   // Only use static method to construct DFA
-  private constructor(start: NFAState) {
+  private constructor(start: DFAState) {
     this.start = start
   }
 
-  public serializeToJson(): DFANodeSchema[] {
+  public serializeToSchema(): DFANodeSchema[] {
     let ans: DFANodeSchema[] = []
 
-    let idMap: Map<NFAState, number> = new Map()
-    let generateId = (state: NFAState, nextId: number = 0) => {
+    let idMap: Map<DFAState, number> = new Map()
+    let nextId = 0
+    let generateId = (state: DFAState) => {
       if (idMap.has(state)) {
         return
       }
       idMap.set(state, nextId)
-      for (let [k, v] of state.getNext().entries()) {
+      nextId += 1
+      for (let [k, v] of state.getEdge().entries()) {
         // This shouldn't happen
-        if (v.length !== 1) {
-          throw new Error()
-        }
-        generateId(v[0], nextId + 1)
+        generateId(v)
       }
     }
 
-    let generateAns = (state: NFAState, vis: Set<NFAState>) => {
+    let generateAns = (state: DFAState, vis: Set<DFAState>) => {
       if (vis.has(state)) {
         return
       }
-      let edge: DFAEdgeSchema | undefined = undefined
-      for (let [k, v] of state.getNext().entries()) {
-        // This shouldn't happen
-        if (v.length !== 1) {
-          throw new Error()
-        }
-        edge = {
-          char: k as string,
-          to: idMap.get(v[0]) as number
-        }
+      let edge: DFAEdgeSchema[] = []
+      for (let [k, v] of state.getEdge().entries()) {
+        edge.push({ char: k as string, to: idMap.get(v) as number })
       }
       vis.add(state)
       ans.push({
         id: idMap.get(state) as number,
         action: state.getAction(),
         acceptable: state.getAcceptable(),
-        edge: edge as DFAEdgeSchema
+        edge: edge
       })
-      for (let [k, v] of state.getNext().entries()) {
-        // This shouldn't happen
-        if (v.length !== 1) {
-          throw new Error()
-        }
-        generateAns(v[0], vis)
+      for (let [_k, v] of state.getEdge().entries()) {
+        generateAns(v, vis)
       }
     }
     generateId(this.start)
@@ -76,12 +116,37 @@ export class DFA {
     return ans
   }
 
+  public static deserailizeFromSchema(schema: DFANodeSchema[]): DFA {
+    let idMap: Map<number, DFAState> = new Map()
+
+    schema.forEach(
+      ({id, action, acceptable, edge}) => {
+        if (!idMap.has(id)) {
+          idMap.set(id, new DFAState())
+        }
+        let state = idMap.get(id) as DFAState
+        state.setAcceptable(acceptable)
+        state.setAction(action)
+        edge.forEach(
+          ({ char, to }) => {
+            if (!idMap.has(to)) {
+              idMap.set(to, new DFAState())
+            }
+            state.addEdge(char, idMap.get(to) as DFAState)
+          }
+        )
+      }
+    )
+
+    return new DFA(idMap.get(0) as DFAState)
+  }
+
   public static fromNFA(nfa: NFA, actionPriority: Map<string, number>): DFA {
     let unmarkedStates: NFAState[][] = []
     let stateSet: NFAState[][] = []
-    let newStateMap: Map<NFAState[], NFAState> = new Map()
+    let newStateMap: Map<NFAState[], DFAState> = new Map()
     let startClosure = eClosure(nfa.getStart())
-    newStateMap.set(startClosure, NFAState.fromStateList(startClosure, actionPriority))
+    newStateMap.set(startClosure, DFAState.fromNFAStateList(startClosure, actionPriority))
     unmarkedStates.push(startClosure)
     stateSet.push(startClosure)
 
@@ -97,15 +162,15 @@ export class DFA {
         let nextState = stateSet.find(value => value.length === u.length && value.every(item => u.includes(item)))
         if (!nextState) {
           nextState = u
-          newStateMap.set(u, NFAState.fromStateList(nextState, actionPriority))
+          newStateMap.set(u, DFAState.fromNFAStateList(nextState, actionPriority))
           stateSet.push(u)
           unmarkedStates.push(u)
         }
-        (newStateMap.get(currentState) as NFAState).addEdge(char, (newStateMap.get(nextState) as NFAState))
+        (newStateMap.get(currentState) as DFAState).addEdge(char, (newStateMap.get(nextState) as DFAState))
       }
       console.log(`Total states: ${stateSet.length}, unmarkedStates: ${unmarkedStates.length}, accept: ${acceptableCharSet.join()}`)
     }
-    return new DFA(newStateMap.get(startClosure) as NFAState)
+    return new DFA(newStateMap.get(startClosure) as DFAState)
   }
 }
 

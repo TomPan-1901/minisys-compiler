@@ -1,5 +1,5 @@
 import { RegToken } from './RegToken'
-import { constructNFA, NFA, NFAState } from './NFA'
+import { NFA } from './NFA'
 import { DFA } from './DFA'
 
 const ALLSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#%'()*+,-./:;<=>\?[\\]^{|}_ \n\t\v\f~&"
@@ -344,7 +344,6 @@ let transformToSuffixReg = (infixRegDef: Map<string, RegToken[]>): Map<string, R
 }
 
 export let parseLex = (lexContent: string) => {
-  let length = lexContent.length
   let preDeclare: string[] = []
   let regDef: Map<string, string> = new Map()
   let postDeclare: string[] = []
@@ -488,7 +487,7 @@ export let parseLex = (lexContent: string) => {
   let suffixRegDef = transformToSuffixReg(infixRegDefsWithAction)
   let result = NFA.fromSuffixRegDef(suffixRegDef)
   let dfa = DFA.fromNFA(result, actionPriority)
-  return [preDeclare, regDef, postDeclare]
+  return dfa.serializeToSchema()
   // console.log(preDeclare)
   // console.log(regDef)
   // console.log(postDeclare)
