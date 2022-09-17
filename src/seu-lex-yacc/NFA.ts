@@ -50,6 +50,21 @@ export class NFAState {
   public getAction(): string | null {
     return this.action
   }
+
+  public static fromStateList(stateList: NFAState[], actionPriority: Map<string, number>): NFAState {
+    let acceptable = stateList.find(value => value.getAcceptable() === true) !== undefined
+    let action = null
+    let curPriority = +Infinity
+    stateList.forEach(value => {
+      let a = value.getAction()
+      if (a !== null && (actionPriority.get(a) as number) < curPriority) {
+        action = a
+        curPriority = (actionPriority.get(a) as number)
+      }
+    })
+    console.log(`${acceptable}, ${action}`)
+    return new NFAState(acceptable, action)
+  }
 }
 
 export class NFA {
@@ -90,6 +105,27 @@ export class NFA {
   }
 }
 
+export class DFA {
+  private start: NFAState
+
+  constructor(start: NFAState) {
+    this.start = start
+  }
+}
+
+let dfs = (state: NFAState, vis: Set<NFAState>): void => {
+  if (state.getAcceptable() === true) {
+    console.log('Find Acceptable State')
+  }
+  vis.add(state)
+  for (let [k, v] of state.getNext().entries()) {
+    v.forEach(value => {
+      if (!vis.has(value)) {
+        dfs(value, vis)
+      }
+    })
+  }
+}
 export let constructAtomNFA = ({ token, tokenType }: RegToken): NFA => {
   // This shouldn't happen
   if (tokenType === 'operator') {
@@ -116,21 +152,27 @@ export let unionNFA = (first: NFA, second: NFA): NFA => {
   second = second.deepCopy()
   let vis: Set<NFAState> = new Set()
   let dfs = (state: NFAState): void => {
+    if (vis.has(state)) {
+      return
+    }
     vis.add(state)
     for (let [k, v] of state.getNext().entries()) {
-      let predicateIndex = v.findIndex(value => value.getAcceptable())
-      if (predicateIndex !== -1) {
-        v[predicateIndex] = first.getEnd() as NFAState
-      }
       for (let i = 0; i < v.length; i++) {
         dfs(v[i])
+        if (v[i].getAcceptable() === true) {
+          // This shouldn't happen
+          if (v[i].getNext().size > 0) {
+            throw new Error(`Acceptable state with out degree`)
+          }
+          v[i] = first.getEnd() as NFAState
+        }
       }
     }
   }
+  dfs(second.getStart())
   for (let [k, v] of second.getStart().getNext().entries()) {
     v.forEach(item => first.getStart().addEdge(k, item))
   }
-  dfs(second.getStart())
   return first
 }
 
@@ -246,10 +288,11 @@ export let constructNFA = (suffixRegDef: Map<string, RegToken[]>): NFA => {
     }
     result.getEnd()?.setAcceptable(true)
     result.getEnd()?.setAction(key)
+    console.log(key)
+    dfs(result.getStart(), new Set())
     nfaList.push(result)
   })
   nfaList.forEach(value => {
-    console.log(value.getEnd()?.getAcceptable())
     start.addEdge(null, value.getStart())
     value.getEnd()?.addEdge(null, end)
   })
@@ -292,12 +335,12 @@ let move = (stateList: NFAState | NFAState[], char: string): NFAState[] => {
   }
   return ans
 }
-export let nfaToDFA = (nfa: NFA): NFA => {
+export let nfaToDFA = (nfa: NFA, actionPriority: Map<string, number>): DFA => {
   let unmarkedStates: NFAState[][] = []
   let stateSet: NFAState[][] = []
   let newStateMap: Map<NFAState[], NFAState> = new Map()
   let startClosure = eClosure(nfa.getStart())
-  newStateMap.set(startClosure, new NFAState(startClosure.find(value => value.getAcceptable() === true) !== undefined))
+  newStateMap.set(startClosure, NFAState.fromStateList(startClosure, actionPriority))
   unmarkedStates.push(startClosure)
   stateSet.push(startClosure)
 
@@ -313,7 +356,7 @@ export let nfaToDFA = (nfa: NFA): NFA => {
       let nextState = stateSet.find(value => value.length === u.length && value.every(item => u.includes(item)))
       if (!nextState) {
         nextState = u
-        newStateMap.set(u, new NFAState(u.find(value => value.getAcceptable() === true) !== undefined))
+        newStateMap.set(u, NFAState.fromStateList(nextState, actionPriority))
         stateSet.push(u)
         unmarkedStates.push(u)
       }
@@ -321,5 +364,5 @@ export let nfaToDFA = (nfa: NFA): NFA => {
     }
     console.log(`Total states: ${stateSet.length}, unmarkedStates: ${unmarkedStates.length}, accept: ${acceptableCharSet.join()}`)
   }
-  return new NFA(newStateMap.get(startClosure) as NFAState, null)
+  return new DFA(newStateMap.get(startClosure) as NFAState)
 }

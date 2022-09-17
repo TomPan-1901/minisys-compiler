@@ -1,5 +1,6 @@
 import { RegToken } from './RegToken'
-import { constructNFA, nfaToDFA } from './NFA'
+import { constructNFA, NFAState, nfaToDFA } from './NFA'
+import { visitNodes } from 'typescript'
 
 const ALLSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#%'()*+,-./:;<=>\?[\\]^{|}_ \n\t\v\f~&"
 
@@ -348,6 +349,7 @@ export let parseLex = (lexContent: string) => {
   let regDef: Map<string, string> = new Map()
   let postDeclare: string[] = []
   let actions: Map<string, string> = new Map()
+  let actionPriority: Map<string, number> = new Map()
   enum LEXPART {
     STARTSTATE,
     PREDECLARE,
@@ -420,6 +422,7 @@ export let parseLex = (lexContent: string) => {
             currentChar++
           }
           let regKey = `__ACTION_REGDEF_${currentLine + 1}`
+          actionPriority.set(regKey, currentLine)
           let regPart = lexLines[currentLine].substring(0, currentChar)
           regDef.set(regKey, regPart)
 
@@ -484,7 +487,7 @@ export let parseLex = (lexContent: string) => {
   })
   let suffixRegDef = transformToSuffixReg(infixRegDefsWithAction)
   let result = constructNFA(suffixRegDef)
-  result = nfaToDFA(result)
+  let dfa = nfaToDFA(result, actionPriority)
   return [preDeclare, regDef, postDeclare]
   // console.log(preDeclare)
   // console.log(regDef)
