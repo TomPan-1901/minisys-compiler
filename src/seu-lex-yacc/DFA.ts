@@ -1,8 +1,19 @@
 import { Queue } from "@datastructures-js/queue"
-import { DFAEdgeSchema, DFANodeSchema } from "./DFANodeSchema"
 import { NFA, NFAState } from "./NFA"
 
 const ALLSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#%'()*+,-./:;<=>\?[\\]^{|}_ \n\t\v\f~&"
+
+type DFANodeSchema = {
+  id: number,
+  action: string | null,
+  acceptable: boolean,
+  edge: DFAEdgeSchema[]
+}
+
+type DFAEdgeSchema = {
+  char: string,
+  to: number
+}
 
 export class DFAState {
   private edge: Map<string, DFAState>
@@ -69,10 +80,28 @@ export class DFAState {
 }
 export class DFA {
   private start: DFAState
+  private current: DFAState
 
   // Only use static method to construct DFA
   private constructor(start: DFAState) {
     this.start = start
+    this.current = start
+  }
+
+  public transfer(char: string): boolean {
+    if (this.current.getEdge().has(char)) {
+      this.current = this.current.getEdge().get(char) as DFAState
+      return true
+    }
+    return false
+  }
+
+  public reset(): void {
+    this.current = this.start
+  }
+
+  public getCurrentAction(): string | null {
+    return this.current.getAction()
   }
 
   public serializeToSchema(): DFANodeSchema[] {
@@ -116,7 +145,7 @@ export class DFA {
     return ans
   }
 
-  public static deserailizeFromSchema(schema: DFANodeSchema[]): DFA {
+  public static deserializeFromSchema(schema: DFANodeSchema[]): DFA {
     let idMap: Map<number, DFAState> = new Map()
 
     schema.forEach(

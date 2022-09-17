@@ -1,6 +1,7 @@
 import { RegToken } from './RegToken'
 import { NFA } from './NFA'
 import { DFA } from './DFA'
+import { DFANodeSchema } from './DFANodeSchema'
 
 const ALLSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#%'()*+,-./:;<=>\?[\\]^{|}_ \n\t\v\f~&"
 
@@ -343,7 +344,7 @@ let transformToSuffixReg = (infixRegDef: Map<string, RegToken[]>): Map<string, R
   return ans
 }
 
-export let parseLex = (lexContent: string) => {
+export let parseLex = (lexContent: string): [string[], DFANodeSchema[], Map<string, string>, string[]] => {
   let preDeclare: string[] = []
   let regDef: Map<string, string> = new Map()
   let postDeclare: string[] = []
@@ -468,7 +469,7 @@ export let parseLex = (lexContent: string) => {
               break
             }
           }
-          actions.set(regKey, currentAction.join('\n'))
+          actions.set(regKey, currentAction.join(';'))
         }
         break
       case LEXPART.POSTDECLARE:
@@ -487,7 +488,7 @@ export let parseLex = (lexContent: string) => {
   let suffixRegDef = transformToSuffixReg(infixRegDefsWithAction)
   let result = NFA.fromSuffixRegDef(suffixRegDef)
   let dfa = DFA.fromNFA(result, actionPriority)
-  return dfa.serializeToSchema()
+  return [preDeclare, dfa.serializeToSchema(), actions, postDeclare]
   // console.log(preDeclare)
   // console.log(regDef)
   // console.log(postDeclare)
