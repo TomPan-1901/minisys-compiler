@@ -169,7 +169,24 @@ let transformToStandardRegExp = (regDef: Map<string, string>): Map<string, RegTo
         }
         else {
           if (value[idx] === '\\') {
-            curAns.push({ token: value[idx + 1], tokenType: 'operand' })
+            if (value[idx + 1] === 'n') {
+              curAns.push({ token: '\n', tokenType: 'operand' })
+            }
+            else if (value[idx + 1] === 't') {
+              curAns.push({ token: '\t', tokenType: 'operand' })
+            }
+            else if (value[idx + 1] === 'v') {
+              curAns.push({ token: '\v', tokenType: 'operand' })
+            }
+            else if (value[idx + 1] === 'f') {
+              curAns.push({ token: '\f', tokenType: 'operand' })
+            }
+            else if (value[idx + 1] === 'r') {
+              curAns.push({ token: '\r', tokenType: 'operand' })
+            }
+            else {
+              curAns.push({ token: value[idx + 1], tokenType: 'operand' })
+            }
             idx += 2
             continue
           }
@@ -186,12 +203,46 @@ let transformToStandardRegExp = (regDef: Map<string, string>): Map<string, RegTo
         else {
           if (value[idx] === '\\') {
             if (firstInBracket) {
-              curAns.push({ token: value[idx + 1], tokenType: 'operand' })
+              if (value[idx + 1] === 'n') {
+                curAns.push({ token: '\n', tokenType: 'operand' })
+              }
+              else if (value[idx + 1] === 't') {
+                curAns.push({ token: '\t', tokenType: 'operand' })
+              }
+              else if (value[idx + 1] === 'v') {
+                curAns.push({ token: '\v', tokenType: 'operand' })
+              }
+              else if (value[idx + 1] === 'f') {
+                curAns.push({ token: '\f', tokenType: 'operand' })
+              }
+              else if (value[idx + 1] === 'r') {
+                curAns.push({ token: '\r', tokenType: 'operand' })
+              }
+              else {
+                curAns.push({ token: value[idx + 1], tokenType: 'operand' })
+              }
               firstInBracket = false
             }
             else {
               curAns.push({ token: '|', tokenType: 'operator' })
-              curAns.push({ token: value[idx + 1], tokenType: 'operand' })
+              if (value[idx + 1] === 'n') {
+                curAns.push({ token: '\n', tokenType: 'operand' })
+              }
+              else if (value[idx + 1] === 't') {
+                curAns.push({ token: '\t', tokenType: 'operand' })
+              }
+              else if (value[idx + 1] === 'v') {
+                curAns.push({ token: '\v', tokenType: 'operand' })
+              }
+              else if (value[idx + 1] === 'f') {
+                curAns.push({ token: '\f', tokenType: 'operand' })
+              }
+              else if (value[idx + 1] === 'r') {
+                curAns.push({ token: '\r', tokenType: 'operand' })
+              }
+              else {
+                curAns.push({ token: value[idx + 1], tokenType: 'operand' })
+              }
             }
             idx += 2
             continue
@@ -408,16 +459,20 @@ export let parseLex = (lexContent: string): [string[], DFANodeSchema[], Map<stri
           let stack: string[] = []
           let currentAction: string[] = []
           let inBracket = false
+          let inQuote = false
 
           while (currentChar < l && (
-            (lexLines[currentLine][currentChar] !== ' ' || inBracket) &&
+            (lexLines[currentLine][currentChar] !== ' ' || inBracket || inQuote) &&
             lexLines[currentLine][currentChar] !== '\t'
           )) {
-            if (lexLines[currentLine][currentChar] === '[') {
+            if (lexLines[currentLine][currentChar] === '[' && !inQuote) {
               inBracket = true
             }
-            else if (lexLines[currentLine][currentChar] === ']') {
+            else if (lexLines[currentLine][currentChar] === ']' && !inQuote) {
               inBracket = false
+            }
+            else if (lexLines[currentLine][currentChar] === '"') {
+              inQuote = !inQuote
             }
             currentChar++
           }
@@ -428,6 +483,10 @@ export let parseLex = (lexContent: string): [string[], DFANodeSchema[], Map<stri
 
           while (currentChar < l && lexLines[currentLine][currentChar] !== '{')
             currentChar++
+          if (currentChar === l) {
+            currentChar = 0
+            currentLine++
+          }
           stack.push(lexLines[currentLine][currentChar])
           if (currentChar === lexLines[currentLine].length - 1) {
             currentChar = 0
@@ -437,7 +496,6 @@ export let parseLex = (lexContent: string): [string[], DFANodeSchema[], Map<stri
             currentChar++
           }
           let tempAction = ''
-          let inQuote = false
           while (stack && currentLine < lexLines.length) {
             if (lexLines[currentLine][currentChar] === '{' && !inQuote) {
               stack.push('{')
@@ -447,6 +505,7 @@ export let parseLex = (lexContent: string): [string[], DFANodeSchema[], Map<stri
                 console.log('Error: no match {')
               }
               else {
+                currentAction.push(tempAction)
                 stack.pop()
               }
             }

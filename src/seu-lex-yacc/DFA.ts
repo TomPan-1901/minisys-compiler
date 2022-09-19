@@ -1,7 +1,7 @@
 import { Queue } from "@datastructures-js/queue"
 import { NFA, NFAState } from "./NFA"
 
-const ALLSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#%'()*+,-./:;<=>\?[\\]^{|}_ \n\t\v\f~&"
+const ALLSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#%'()*+,-./:;<=>\?[\\]^{|}_ \n\r\t\v\f~&"
 
 type DFANodeSchema = {
   id: number,
