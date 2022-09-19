@@ -488,6 +488,7 @@ export let parseLex = (lexContent: string): [string[], DFANodeSchema[], Map<stri
   let suffixRegDef = transformToSuffixReg(infixRegDefsWithAction)
   let result = NFA.fromSuffixRegDef(suffixRegDef)
   let dfa = DFA.fromNFA(result, actionPriority)
+  dfa = DFA.minimizedDFA(dfa)
   return [preDeclare, dfa.serializeToSchema(), actions, postDeclare]
   // console.log(preDeclare)
   // console.log(regDef)

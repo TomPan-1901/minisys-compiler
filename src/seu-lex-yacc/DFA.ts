@@ -52,7 +52,7 @@ export class DFAState {
   }
 
   public setAction(action: string | null): void {
-    this.action = action 
+    this.action = action
   }
 
   public addEdge(char: string, state: DFAState): void {
@@ -149,7 +149,7 @@ export class DFA {
     let idMap: Map<number, DFAState> = new Map()
 
     schema.forEach(
-      ({id, action, acceptable, edge}) => {
+      ({ id, action, acceptable, edge }) => {
         if (!idMap.has(id)) {
           idMap.set(id, new DFAState())
         }
@@ -200,6 +200,96 @@ export class DFA {
       console.log(`Total states: ${stateSet.length}, unmarkedStates: ${unmarkedStates.length}, accept: ${acceptableCharSet.join()}`)
     }
     return new DFA(newStateMap.get(startClosure) as DFAState)
+  }
+
+  public static minimizedDFA(dfa: DFA): DFA {
+    let dfaStates = dfa.serializeToSchema()
+    let stateSet: Set<Set<DFANodeSchema>> = new Set()
+    let initialStateMap: Map<string | null, Set<DFANodeSchema>> = new Map()
+    dfaStates.forEach(value => {
+      if (!initialStateMap.has(value.action)) {
+        initialStateMap.set(value.action, new Set())
+      }
+      (initialStateMap.get(value.action) as Set<DFANodeSchema>).add(value)
+    })
+    initialStateMap.forEach(value => stateSet.add(value))
+    while (true) {
+      let toBeDeletedStateSetList: Set<DFANodeSchema>[] = []
+      let splitStateSetList: Set<DFANodeSchema>[] = []
+      for (let [v, _v] of stateSet.entries()) {
+        for (let i = 0; i < ALLSET.length; i++) {
+          let stateMap: Map<Set<DFANodeSchema> | null, Set<DFANodeSchema>> = new Map()
+          v.forEach(value => {
+            let outEdge = value.edge.find(item => item.char === ALLSET[i])
+            if (outEdge === undefined) {
+              if (!stateMap.has(null)) {
+                stateMap.set(null, new Set())
+              }
+              (stateMap.get(null) as Set<DFANodeSchema>).add(value)
+              return
+            }
+            for (let [nodeSet, _nodeSet] of stateSet.entries()) {
+              let flag = false
+              for (let edge of nodeSet.values()) {
+                if (edge.id === outEdge?.to) {
+                  if (!stateMap.has(nodeSet)) {
+                    stateMap.set(nodeSet, new Set())
+                  }
+                  (stateMap.get(nodeSet) as Set<DFANodeSchema>).add(value)
+                  flag = true
+                  break
+                }
+              }
+              if (flag) {
+                break
+              }
+            }
+          })
+          if (stateMap.size > 1) {
+            stateMap.forEach(splitState => splitStateSetList.push(splitState))
+            toBeDeletedStateSetList.push(v)
+            break
+          }
+        }
+      }
+      if (toBeDeletedStateSetList.length === 0) {
+        break
+      }
+      toBeDeletedStateSetList.forEach(toBeDeletedStateSet => stateSet.delete(toBeDeletedStateSet))
+      splitStateSetList.forEach(splitStateSet => stateSet.add(splitStateSet))
+    }
+    let resultDFANodeMap: Map<Set<DFANodeSchema>, DFAState> = new Map()
+    stateSet.forEach(value => resultDFANodeMap.set(value, new DFAState()))
+    let newStart: DFAState = new DFAState()
+    stateSet.forEach(state => {
+      let hasSetAction = false
+      for (let node of state.values()) {
+        if (!hasSetAction) {
+          resultDFANodeMap.get(state)?.setAcceptable(node.acceptable)
+          resultDFANodeMap.get(state)?.setAction(node.action)
+          hasSetAction = true
+        }
+        node.edge.forEach(nodeEdge => {
+          for (let nodeSet of resultDFANodeMap.keys()) {
+            let flag = false
+            for (let node of nodeSet.values()) {
+              if (node.id === 0) {
+                newStart = resultDFANodeMap.get(nodeSet) as DFAState
+              }
+              if (node.id === nodeEdge.to) {
+                (resultDFANodeMap.get(state) as DFAState).addEdge(nodeEdge.char, (resultDFANodeMap.get(nodeSet) as DFAState))
+                flag = true
+                break
+              }
+            }
+            if (flag)
+              break
+          }
+        })
+        break
+      }
+    })
+    return new DFA(newStart)
   }
 }
 
