@@ -321,11 +321,13 @@ let move = (stateList: NFAState | NFAState[], char: string): NFAState[] => {
   if (!(stateList instanceof Array)) {
     stateList = [stateList]
   }
+  let ansSet: Set<NFAState> = new Set()
   let ans: NFAState[] = []
   for (let i = 0; i < stateList.length; i++) {
     stateList[i].getNext().get(char)?.forEach(value => {
-      ans.push(value)
+      ansSet.add(value)
     })
   }
+  ansSet.forEach(value => ans.push(value))
   return ans
 }
