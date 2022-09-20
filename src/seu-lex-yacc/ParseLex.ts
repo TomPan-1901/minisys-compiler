@@ -252,8 +252,31 @@ let transformToStandardRegExp = (regDef: Map<string, string>): Map<string, RegTo
               let excludeSet: Set<string> = new Set()
               idx++
               while (idx < value.length && value[idx] !== ']') {
-                excludeSet.add(value[idx])
-                idx++
+                if (value[idx] === '\\') {
+                  if (value[idx + 1] === 'n') {
+                    excludeSet.add('\n')
+                  }
+                  else if (value[idx + 1] === 't') {
+                    excludeSet.add('\t')
+                  }
+                  else if (value[idx + 1] === 'v') {
+                    excludeSet.add('\v')
+                  }
+                  else if (value[idx + 1] === 'f') {
+                    excludeSet.add('\f')
+                  }
+                  else if (value[idx + 1] === 'r') {
+                    excludeSet.add('\r')
+                  }
+                  else {
+                    excludeSet.add(value[idx + 1])
+                  }
+                  idx += 2
+                }
+                else {
+                  excludeSet.add(value[idx])
+                  idx++
+                }
               }
               for (let char of ALLSET) {
                 if (!excludeSet.has(char)) {
