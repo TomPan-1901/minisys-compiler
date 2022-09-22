@@ -1,4 +1,4 @@
-import { LR1Collection, LR1Item, Production } from "./YaccTypes"
+import { LR1Collection, LR1DFA, LR1Item, Production } from "./YaccTypes"
 
 let FIRST = (
   productionList: Production[],
@@ -74,7 +74,11 @@ let FOLLOW = (
   return ans
 }
 
-let CLOSURE = (collection: LR1Collection, productionList: Production[], firstMap: Map<string, Set<string>>): LR1Collection => {
+let CLOSURE = (
+  collection: LR1Collection,
+  productionList: Production[],
+  firstMap: Map<string, Set<string>>
+): LR1Collection => {
   let ans = collection.deepCopy()
   let idx = 0
   let visitedNonTerminator: Set<string> = new Set()
@@ -107,7 +111,12 @@ let CLOSURE = (collection: LR1Collection, productionList: Production[], firstMap
   return ans
 }
 
-let GOTO = (collection: LR1Collection, X: string, productionList: Production[], firstMap: Map<string, Set<string>>): LR1Collection | null => {
+let GOTO = (
+  collection: LR1Collection,
+  X: string,
+  productionList: Production[],
+  firstMap: Map<string, Set<string>>
+): LR1Collection | null => {
   let lr1ItemCore = new LR1Collection([])
   collection
     .getItem()
@@ -121,11 +130,16 @@ let GOTO = (collection: LR1Collection, X: string, productionList: Production[], 
 let getAllLR1Collections = (productionList: Production[],
   firstMap: Map<string, Set<string>>,
   terminatorSet: Set<string>,
-  nonTerminatorSet: Set<string>): LR1Collection[] => {
+  nonTerminatorSet: Set<string>,
+  leftSet: Set<string>,
+  rightSet: Set<string>,
+  priorityMap: Map<string, number>
+): LR1Collection[] => {
   let allSet: Set<string> = new Set()
   terminatorSet.forEach(v => allSet.add(v))
   nonTerminatorSet.forEach(v => allSet.add(v))
   let ans: LR1Collection[] = []
+  let gotoTable: Map<number, Map<string, number>> = new Map()
   ans.push(CLOSURE(new LR1Collection([new LR1Item(productionList[0], 0, '')]), productionList, firstMap))
   let idx = 0
   while (idx < ans.length) {
@@ -135,13 +149,20 @@ let getAllLR1Collections = (productionList: Production[],
       if (result === null) {
         continue
       }
-      if (!ans.find(value => value.equals(result as LR1Collection))) {
-        ans.push(result)
+      if (!gotoTable.has(idx)) {
+        gotoTable.set(idx, new Map())
       }
+      let gotoIndex = ans.findIndex(value => value.equals(result as LR1Collection))
+      if (gotoIndex === -1) {
+        ans.push(result)
+        gotoIndex = ans.length - 1
+      }
+      (gotoTable.get(idx) as Map<string, number>).set(X, gotoIndex)
     }
     console.log(`index: ${idx}, length: ${ans.length}`)
     idx++
   }
+  let a = LR1DFA.createLR1DFA(ans, gotoTable, productionList, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap)
   return ans
 }
 export let parseYacc = (yaccContent: string) => {
@@ -157,6 +178,7 @@ export let parseYacc = (yaccContent: string) => {
   let nonTerminatorSet: Set<string> = new Set()
   let leftSet: Set<string> = new Set()
   let rightSet: Set<string> = new Set()
+  let priorityMap: Map<string, number> = new Map()
   let productionList: Production[] = []
   let postDeclare: string[] = []
   let startUnitName = ''
@@ -183,15 +205,28 @@ export let parseYacc = (yaccContent: string) => {
             throw new Error('Multiple or no start unit')
           }
           startUnitName = wordsList[1]
-          productionList.push(new Production('__SEU_YACC_START', [startUnitName]))
+          productionList.push(new Production('__SEU_YACC_START', [startUnitName], priorityMap))
           nonTerminatorSet.add('__SEU_YACC_START')
         }
-        else if (wordsList[1] === '%left') {
+        else if (wordsList[0] === '%left') {
           for (let i = 1; i < wordsList.length; i++) {
+            if (wordsList[i][0] === '\'' && wordsList[i][wordsList[i].length - 1] === '\'') {
+              let innerString = wordsList[i].substring(1, wordsList[i].length - 1)
+              if (innerString === '\\\'') {
+                leftSet.add('\'')
+                priorityMap.set('\'', currentLine)
+              }
+              else if (innerString.length === 1) {
+                leftSet.add(innerString)
+                priorityMap.set(innerString, currentLine)
+              }
+              continue
+            }
             leftSet.add(wordsList[i])
+            priorityMap.set(wordsList[i], currentLine)
           }
         }
-        else if (wordsList[1] === '%right') {
+        else if (wordsList[0] === '%right') {
           for (let i = 1; i < wordsList.length; i++) {
             rightSet.add(wordsList[i])
           }
@@ -284,7 +319,7 @@ export let parseYacc = (yaccContent: string) => {
             } while (yaccLines[currentLine][currentChar] === ' ' || yaccLines[currentLine][currentChar] === '\t')
           }
           nonTerminatorSet.add(leftItemName)
-          productionList.push(new Production(leftItemName, currentProduction))
+          productionList.push(new Production(leftItemName, currentProduction, priorityMap))
           if (yaccLines[currentLine][currentChar] === ';') {
             break
           }
@@ -302,7 +337,7 @@ export let parseYacc = (yaccContent: string) => {
             }
           } while (yaccLines[currentLine][currentChar] === ' ' || yaccLines[currentLine][currentChar] === '\t')
           if (yaccLines[currentLine][currentChar] === ';') {
-            productionList.push(new Production(leftItemName, ['']))
+            productionList.push(new Production(leftItemName, [''], priorityMap))
           }
         }
         break
@@ -313,7 +348,7 @@ export let parseYacc = (yaccContent: string) => {
     currentLine++
   }
   let first = FIRST(productionList, nonTerminatorSet, terminatorSet)
-  let result = getAllLR1Collections(productionList, first, terminatorSet, nonTerminatorSet)
+  let result = getAllLR1Collections(productionList, first, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap)
   // let c = CLOSURE(new LR1Collection([new LR1Item(productionList[0], 0, '')]), productionList, first)
   // let follow = FOLLOW(productionList, nonTerminatorSet, terminatorSet, first, '__SEU_YACC_START')
 }
