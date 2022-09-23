@@ -1,13 +1,15 @@
 %token id
-%left '+'
-%left '*'
+%left '+' '-'
+%left '*' '/'
 %start E
 
 %%
 E
  : E '+' E
+ | E '-' E
  | E '*' E
+ | E '/' E
  | id
  ;
 %%
-// nothing
+const {yylex, YYLVAL} = require('./calc-lex.js')

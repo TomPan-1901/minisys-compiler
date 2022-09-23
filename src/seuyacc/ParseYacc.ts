@@ -164,7 +164,7 @@ let getLR1DFA = (productionList: Production[],
   }
   return LR1DFA.createLR1DFA(ans, gotoTable, productionList, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap)
 }
-export let parseYacc = (yaccContent: string) => {
+export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
   let yaccLines = yaccContent.split('\n').map(value => value.trimStart().trimEnd())
   enum YACCPART {
     PREDECLARE,
@@ -348,7 +348,7 @@ export let parseYacc = (yaccContent: string) => {
   }
   let first = FIRST(productionList, nonTerminatorSet, terminatorSet)
   let result = getLR1DFA(productionList, first, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap)
-  return result
+  return [result, postDeclare]
   // let c = CLOSURE(new LR1Collection([new LR1Item(productionList[0], 0, '')]), productionList, first)
   // let follow = FOLLOW(productionList, nonTerminatorSet, terminatorSet, first, '__SEU_YACC_START')
 }

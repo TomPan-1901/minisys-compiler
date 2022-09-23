@@ -133,7 +133,7 @@ content.push(...preDeclare)
 actions.forEach((value, key) => {
   console.log(value, key)
   actionFunctions[key] = 
-`() => { ${value} }`
+`() => { yylval=undefined;${value} }`
 })
 content.push(
 `
