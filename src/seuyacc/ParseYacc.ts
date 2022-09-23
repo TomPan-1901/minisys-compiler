@@ -163,6 +163,7 @@ let getAllLR1Collections = (productionList: Production[],
     idx++
   }
   let a = LR1DFA.createLR1DFA(ans, gotoTable, productionList, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap)
+  let b = JSON.stringify(a.serializeToSchema())
   return ans
 }
 export let parseYacc = (yaccContent: string) => {

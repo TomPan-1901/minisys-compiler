@@ -2,6 +2,7 @@ export class Production {
   private left: string
   private right: string[]
   private priority?: number
+  private priorityTerminator?: string
 
   constructor(left: string, right: string[], priorityMap?: Map<string, number>) {
     this.left = left
@@ -12,6 +13,7 @@ export class Production {
     for (let i = right.length - 1; i >= 0; i--) {
       if ((priorityMap as Map<string, number>).has(right[i])) {
         this.priority = (priorityMap as Map<string, number>).get(right[i])
+        this.priorityTerminator = right[i]
         break
       }
     }
@@ -47,6 +49,10 @@ export class Production {
 
   public getPriority(): number | undefined {
     return this.priority
+  }
+
+  public getPriorityTerminator() {
+    return this.priorityTerminator
   }
 
   public deepCopy(): Production {
@@ -109,7 +115,6 @@ export class LR1Item {
   }
 
   public getNext(): LR1Item | null {
-    // This shouldn't happen
     if (this.dot >= this.production.getRight().length) {
       return null
     }
@@ -118,6 +123,10 @@ export class LR1Item {
 
   public getPriority() {
     return this.production.getPriority()
+  }
+
+  public getPriorityTerminator() {
+    return this.production.getPriorityTerminator()
   }
 
   public getProduction() {
@@ -167,17 +176,18 @@ type GoToSchema = {
 
 type LR1DFASchema = {
   action: ActionSchema[][],
-  goto: GoToSchema[][]
+  goto: GoToSchema[][],
+  reduceAction: ReduceAction[]
 }
 export class LR1DFA {
   private action: Map<string, Action>[]
   private goto: Map<string, number>[]
-  private productionList: Production[]
+  private reduceActionList: ReduceAction[]
 
-  constructor(action: Map<string, Action>[], goto: Map<string, number>[], productionList: Production[]) {
+  constructor(action: Map<string, Action>[], goto: Map<string, number>[], reduceActionList: ReduceAction[]) {
     this.action = action
     this.goto = goto
-    this.productionList = productionList
+    this.reduceActionList = reduceActionList
   }
 
   /**
@@ -203,30 +213,36 @@ export class LR1DFA {
         .map(_value => new Map())
     for (let stateI = 0; stateI < lr1CollectionList.length; stateI++) {
       let collectionI = lr1CollectionList[stateI]
-      collectionI.getItem().forEach(lr1Item => {
+      collectionI.getItem().forEach((lr1Item, index, array) => {
         let currentHeader = lr1Item.getHeader()
         let currentExpect = lr1Item.getExpect()
-        let expectPriority = priorityMap.get(currentExpect)
-        let itemPriority = lr1Item.getPriority()
 
         if (currentHeader !== null) {
-          if (nonTerminatorSet.has(currentHeader)) {
+          if (terminatorSet.has(currentHeader)) {
             // 要么表里没有填
             // 如果填了，那就是currentExpect优先级高，或者相等+右结合
             // 如果判断不出优先级，移入
-            if (
-              !action[stateI].has(currentExpect) ||
-              !expectPriority ||
-              !itemPriority ||
-              expectPriority > itemPriority ||
-              (expectPriority === itemPriority && rightSet.has(currentExpect))
-            )
-              action[stateI].set(currentExpect, {
+            let existedAction = action[stateI].get(currentHeader)?.action
+            let existedTarget = action[stateI].get(currentHeader)?.target
+            let targetPriority = existedAction === 'reduce' && existedTarget ? productionList[existedTarget].getPriority() : undefined
+            let headerPriority = priorityMap.get(currentHeader)
+            if (!existedAction || // 表里没有填
+              !targetPriority ||
+              !headerPriority ||
+              headerPriority > targetPriority ||
+              headerPriority === targetPriority && rightSet.has(currentHeader)
+            ) {
+              // Shift-shift conflict, shouldn't happen
+              if (existedAction === 'shift' && (gotoTable.get(stateI) as Map<string, number>).get(currentHeader) as number !== existedTarget) {
+                throw new Error()
+              }
+              action[stateI].set(currentHeader, {
                 action: 'shift',
                 target: (gotoTable.get(stateI) as Map<string, number>).get(currentHeader) as number
               })
+            }
           }
-          else if (terminatorSet.has(currentHeader)) {
+          else if (nonTerminatorSet.has(currentHeader)) {
             goto[stateI].set(currentHeader, (gotoTable.get(stateI) as Map<string, number>).get(currentHeader) as number)
           }
           else {
@@ -235,7 +251,7 @@ export class LR1DFA {
           }
         }
         else {
-          if (currentExpect === '') {
+          if (currentExpect === '' && lr1Item.getProduction().getLeft() === '__SEU_YACC_START') {
             action[stateI].set(currentExpect, {
               action: "accept",
               target: 0
@@ -245,12 +261,28 @@ export class LR1DFA {
           // 如果填了，那么当前的产生式优先级高，或者相等+左结合
           // 里面是shift，判断不出，不动
           // 处理规约-规约冲突
-          let currentProductionIdx = productionList.findIndex(production => production.equals(lr1Item.getProduction()))
-          let existedProductionIdx = action[stateI].get(currentExpect)?.target
-          if (!action[stateI].has(currentExpect) ||
-            currentProductionIdx < (existedProductionIdx as number) ||
-            (currentProductionIdx === existedProductionIdx && leftSet.has(currentExpect)) ||
-            ((!expectPriority || !itemPriority) && action[stateI].get(currentExpect)?.action === "shift")
+          let existedAction = action[stateI].get(currentExpect)?.action
+          let existedTarget = action[stateI].get(currentExpect)?.target
+          let targetPriority = lr1Item.getPriority()
+          let existedPriority = priorityMap.get(currentExpect)
+          let currentPriorityTerminator = lr1Item.getPriorityTerminator()
+          let existedProductionPriority = existedTarget
+          let currentProductionPriority = productionList.findIndex(item => item.equals(lr1Item.getProduction()))
+          if (currentProductionPriority === -1) {
+            throw new Error()
+          }
+          if (!existedAction ||
+            (existedAction === 'shift' &&
+              targetPriority &&
+              existedPriority &&
+              currentPriorityTerminator &&
+              (targetPriority > existedPriority ||
+                targetPriority === existedPriority && leftSet.has(currentPriorityTerminator)
+              )
+            ) ||
+            (existedAction === 'reduce' &&
+                currentProductionPriority < (existedProductionPriority as number)
+            )
           )
             action[stateI].set(currentExpect, {
               action: 'reduce',
@@ -259,7 +291,12 @@ export class LR1DFA {
         }
       })
     }
-    return new LR1DFA(action, goto, productionList)
+    return new LR1DFA(action, goto, productionList.map(production => {
+      return {
+        leftToken: production.getLeft(),
+        rightItemCount: production.getRight().length
+      }
+    }))
   }
 
   public serializeToSchema(): LR1DFASchema {
@@ -281,7 +318,8 @@ export class LR1DFA {
     })
     return {
       action: action,
-      goto: goto
+      goto: goto,
+      reduceAction: this.reduceActionList
     }
   }
 }
