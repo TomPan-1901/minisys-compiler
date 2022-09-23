@@ -488,13 +488,17 @@ export let parseLex = (lexContent: string): [string[], DFANodeSchema[], Map<stri
             (lexLines[currentLine][currentChar] !== ' ' || inBracket || inQuote) &&
             lexLines[currentLine][currentChar] !== '\t'
           )) {
+            if (lexLines[currentLine][currentChar] === '\\') {
+              currentChar += 2
+              continue
+            }
             if (lexLines[currentLine][currentChar] === '[' && !inQuote) {
               inBracket = true
             }
             else if (lexLines[currentLine][currentChar] === ']' && !inQuote) {
               inBracket = false
             }
-            else if (lexLines[currentLine][currentChar] === '"') {
+            else if (lexLines[currentLine][currentChar] === '"' && !inBracket) {
               inQuote = !inQuote
             }
             currentChar++
