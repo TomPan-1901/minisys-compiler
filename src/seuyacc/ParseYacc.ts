@@ -127,14 +127,14 @@ let GOTO = (
   return CLOSURE(lr1ItemCore, productionList, firstMap)
 }
 
-let getAllLR1Collections = (productionList: Production[],
+let getLR1DFA = (productionList: Production[],
   firstMap: Map<string, Set<string>>,
   terminatorSet: Set<string>,
   nonTerminatorSet: Set<string>,
   leftSet: Set<string>,
   rightSet: Set<string>,
   priorityMap: Map<string, number>
-): LR1Collection[] => {
+): LR1DFA => {
   let allSet: Set<string> = new Set()
   terminatorSet.forEach(v => allSet.add(v))
   nonTerminatorSet.forEach(v => allSet.add(v))
@@ -162,9 +162,7 @@ let getAllLR1Collections = (productionList: Production[],
     console.log(`index: ${idx}, length: ${ans.length}`)
     idx++
   }
-  let a = LR1DFA.createLR1DFA(ans, gotoTable, productionList, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap)
-  let b = JSON.stringify(a.serializeToSchema())
-  return ans
+  return LR1DFA.createLR1DFA(ans, gotoTable, productionList, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap)
 }
 export let parseYacc = (yaccContent: string) => {
   let yaccLines = yaccContent.split('\n').map(value => value.trimStart().trimEnd())
@@ -349,7 +347,8 @@ export let parseYacc = (yaccContent: string) => {
     currentLine++
   }
   let first = FIRST(productionList, nonTerminatorSet, terminatorSet)
-  let result = getAllLR1Collections(productionList, first, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap)
+  let result = getLR1DFA(productionList, first, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap)
+  return result
   // let c = CLOSURE(new LR1Collection([new LR1Item(productionList[0], 0, '')]), productionList, first)
   // let follow = FOLLOW(productionList, nonTerminatorSet, terminatorSet, first, '__SEU_YACC_START')
 }

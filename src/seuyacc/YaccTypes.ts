@@ -1,3 +1,5 @@
+import ASTNode from "../entities/ASTNode"
+
 export class Production {
   private left: string
   private right: string[]
@@ -183,11 +185,47 @@ export class LR1DFA {
   private action: Map<string, Action>[]
   private goto: Map<string, number>[]
   private reduceActionList: ReduceAction[]
+  private stateStack: number[] = [0]
+  private astNodeStack: ASTNode[] = []
 
   constructor(action: Map<string, Action>[], goto: Map<string, number>[], reduceActionList: ReduceAction[]) {
     this.action = action
     this.goto = goto
     this.reduceActionList = reduceActionList
+  }
+
+  public transfer(token: string, yylval: any) {
+    let topState = this.stateStack[this.stateStack.length - 1]
+    let currentAction = this.action[topState].get(token)
+    if (!currentAction) {
+      throw new Error()
+    }
+    if (currentAction.action === 'accept') {
+      this.stateStack.pop()
+      return this.astNodeStack.pop()
+    }
+    while (currentAction.action === 'reduce') {
+      let { leftToken, rightItemCount } = this.reduceActionList[currentAction.target]
+      let children: ASTNode[] = []
+      for (let i = 0; i < rightItemCount; i++) {
+        children.push(this.astNodeStack.pop() as ASTNode)
+        this.stateStack.pop()
+      } 
+      let currentTopState = this.stateStack[this.stateStack.length - 1]
+      this.astNodeStack.push(ASTNode.fromNonTerminator(leftToken, children.reverse()))
+      this.stateStack.push(this.goto[currentTopState].get(leftToken) as number)
+      topState = this.stateStack[this.stateStack.length - 1]
+      currentAction = this.action[topState].get(token)
+      if (!currentAction) {
+        throw new Error()
+      }
+    }
+    if (currentAction.action === 'accept') {
+      this.stateStack.pop()
+      return this.astNodeStack.pop()
+    }
+    this.stateStack.push(currentAction.target)
+    this.astNodeStack.push(ASTNode.fromTerminator(token, yylval))
   }
 
   /**
@@ -202,7 +240,7 @@ export class LR1DFA {
     leftSet: Set<string>,
     rightSet: Set<string>,
     priorityMap: Map<string, number>
-  ) {
+  ): LR1DFA {
     let action: Map<string, Action>[]
       = new Array(lr1CollectionList.length)
         .fill(null)
@@ -281,7 +319,7 @@ export class LR1DFA {
               )
             ) ||
             (existedAction === 'reduce' &&
-                currentProductionPriority < (existedProductionPriority as number)
+              currentProductionPriority < (existedProductionPriority as number)
             )
           )
             action[stateI].set(currentExpect, {
@@ -321,5 +359,22 @@ export class LR1DFA {
       goto: goto,
       reduceAction: this.reduceActionList
     }
+  }
+
+  public static deserializeFromSchema(schema: LR1DFASchema): LR1DFA {
+    let { action, goto, reduceAction } = schema
+    let actionMapList: Map<string, Action>[] = []
+    let gotoMapList: Map<string, number>[] = []
+    action.forEach(value => {
+      let actionMap: Map<string, Action> = new Map()
+      value.forEach(({ token, action }) => actionMap.set(token, action))
+      actionMapList.push(actionMap)
+    })
+    goto.forEach(value => {
+      let gotoMap: Map<string, number> = new Map()
+      value.forEach(({ token, to }) => gotoMap.set(token, to))
+      gotoMapList.push(gotoMap)
+    })
+    return new LR1DFA(actionMapList, gotoMapList, reduceAction)
   }
 }
