@@ -92,7 +92,7 @@ export class LR1Item {
   }
 
   public getHeader(): string | null {
-    if (this.dot < this.production.getRight().length)
+    if (this.dot < this.production.getRight().length && this.production.getRight()[0] !== '')
       return this.production.getRight()[this.dot]
     else {
       return null
@@ -330,9 +330,17 @@ export class LR1DFA {
       })
     }
     return new LR1DFA(action, goto, productionList.map(production => {
+      let leftToken = production.getLeft()
+      let rightItems = production.getRight()
+      if (rightItems.length === 1 && rightItems[0] === '') {
+        return {
+          leftToken: leftToken,
+          rightItemCount: 0
+        }
+      }
       return {
-        leftToken: production.getLeft(),
-        rightItemCount: production.getRight().length
+        leftToken: leftToken,
+        rightItemCount: rightItems.length
       }
     }))
   }
