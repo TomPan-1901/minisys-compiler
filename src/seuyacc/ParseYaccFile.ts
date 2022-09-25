@@ -1,6 +1,6 @@
 import fs from 'fs'
+import { LR1DFA } from './LR1/LR1DFA'
 import { parseYacc } from './ParseYacc'
-import { LR1DFA } from './YaccTypes'
 
 if (process.argv.length < 4) {
   console.log('Usage: node ParseLexFile.js <input lex file> <output js file>')
