@@ -1,4 +1,7 @@
-import { LR1Collection, LR1DFA, LR1Item, Production } from "./YaccTypes"
+import { LR1Collection } from "./LR1/LR1Collection"
+import { LR1DFA } from "./LR1/LR1DFA"
+import { LR1Item } from "./LR1/LR1Item"
+import { Production } from "./Production"
 
 let FIRST = (
   productionList: Production[],
