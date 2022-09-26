@@ -16,10 +16,12 @@ export type GoToSchema = {
 export type LR1DFASchema = {
   action: ActionSchema[][],
   goto: GoToSchema[][],
-  reduceAction: ReduceAction[]
+  reduceAction: ReduceAction[],
+  restoreList: number[]
 }
 
 export type ReduceAction = {
   leftToken: string,
-  rightItemCount: number
+  rightItemCount: number,
+  action: string
 }

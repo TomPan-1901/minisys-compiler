@@ -29,12 +29,26 @@ class ASTNode {
     }
 }
 class LR1DFA {
-    constructor(action, goto, reduceActionList) {
+    constructor(action, goto, reduceActionList, restoreList) {
         this.stateStack = [0];
         this.astNodeStack = [];
         this.action = action;
         this.goto = goto;
         this.reduceActionList = reduceActionList;
+        this.restoreList = restoreList
+    }
+    restore() {
+      let topState = this.stateStack.pop()
+      while (!this.restoreList.has(topState)) {
+        topState = this.stateStack.pop()
+        if (topState === undefined) {
+          throw new Error()
+        }
+      }
+      this.stateStack.push(topState)
+      this.transfer('error', '')
+      topState = this.stateStack[this.stateStack.length - 1]
+      console.log(this.reduceActionList[topState].action)
     }
     transfer(token, yylval) {
         let topState = this.stateStack[this.stateStack.length - 1];
@@ -70,7 +84,7 @@ class LR1DFA {
         this.astNodeStack.push(ASTNode.fromTerminator(token, yylval));
     }
     static deserializeFromSchema(schema) {
-        let { action, goto, reduceAction } = schema;
+        let { action, goto, reduceAction, restoreList } = schema;
         let actionMapList = [];
         let gotoMapList = [];
         action.forEach(value => {
@@ -83,7 +97,7 @@ class LR1DFA {
             value.forEach(({ token, to }) => gotoMap.set(token, to));
             gotoMapList.push(gotoMap);
         });
-        return new LR1DFA(actionMapList, gotoMapList, reduceAction);
+        return new LR1DFA(actionMapList, gotoMapList, reduceAction, new Set(restoreList));
     }
 }
 let __lr1DFA = LR1DFA.deserializeFromSchema(${JSON.stringify(dfa.serializeToSchema())})
@@ -91,14 +105,19 @@ let result
 while (true) {
   let token = yylex()
   if (token !== null) {
-    __lr1DFA.transfer(token, YYLVAL())
+    try {
+       __lr1DFA.transfer(token, YYLVAL())
+    }
+    catch {
+       __lr1DFA.restore()
+    }
   }
   else {
     result = __lr1DFA.transfer('', '')
     break
   }
 }
-console.log(result)
+console.log(JSON.stringify(result))
 `
 )
 fs.writeFile(outFilePath, content.join('\n'), err => console.log(err))
