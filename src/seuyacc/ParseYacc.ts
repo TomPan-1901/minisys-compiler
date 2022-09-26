@@ -136,12 +136,14 @@ let getLR1DFA = (productionList: Production[],
   nonTerminatorSet: Set<string>,
   leftSet: Set<string>,
   rightSet: Set<string>,
-  priorityMap: Map<string, number>
+  priorityMap: Map<string, number>,
+  actionList: string[]
 ): LR1DFA => {
   let allSet: Set<string> = new Set()
   terminatorSet.forEach(v => allSet.add(v))
   nonTerminatorSet.forEach(v => allSet.add(v))
   let ans: LR1Collection[] = []
+  let restoreList: number[] = []
   let gotoTable: Map<number, Map<string, number>> = new Map()
   ans.push(CLOSURE(new LR1Collection([new LR1Item(productionList[0], 0, '')]), productionList, firstMap))
   let idx = 0
@@ -165,14 +167,20 @@ let getLR1DFA = (productionList: Production[],
     console.log(`index: ${idx}, length: ${ans.length}`)
     idx++
   }
-  return LR1DFA.createLR1DFA(ans, gotoTable, productionList, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap)
+  ans.forEach((value, index) => {
+    if (value.getItem().some(value => value.getProduction().getRight()[0] === 'error')) {
+      restoreList.push(index)
+    }
+  })
+  return LR1DFA.createLR1DFA(ans, gotoTable, productionList, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap, actionList, restoreList)
 }
 export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
   let yaccLines = yaccContent.split('\n').map(value => value.trimStart().trimEnd())
   enum YACCPART {
     PREDECLARE,
     PRODUCTIONDEF,
-    POSTDECLARE
+    POSTDECLARE,
+    ACTIONDEF
   }
   let currentLine = 0
   let currentState = YACCPART.PREDECLARE
@@ -182,9 +190,11 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
   let rightSet: Set<string> = new Set()
   let priorityMap: Map<string, number> = new Map()
   let productionList: Production[] = []
+  let actionList: string[] = []
   let postDeclare: string[] = []
   let startUnitName = ''
 
+  terminatorSet.add('error')
   while (currentLine < yaccLines.length) {
     if (yaccLines[currentLine] === '') {
       currentLine++
@@ -208,6 +218,7 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
           }
           startUnitName = wordsList[1]
           productionList.push(new Production('__SEU_YACC_START', [startUnitName], priorityMap))
+          actionList.push('')
           nonTerminatorSet.add('__SEU_YACC_START')
         }
         else if (wordsList[0] === '%left') {
@@ -269,6 +280,7 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
         }
         while (!inQuote && yaccLines[currentLine][currentChar] !== ';') {
           let currentProduction: string[] = []
+          let currentAction =''
           while (inQuote ||
             (yaccLines[currentLine][currentChar] !== '|' &&
               yaccLines[currentLine][currentChar] !== ';')
@@ -319,9 +331,32 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
                 }
               }
             } while (yaccLines[currentLine][currentChar] === ' ' || yaccLines[currentLine][currentChar] === '\t')
+            if (yaccLines[currentLine][currentChar] !== '{')
+              continue
+            let bracketStack: string[] = []
+            do {
+              currentAction += yaccLines[currentLine][currentChar]
+              if (yaccLines[currentLine][currentChar] === '}') {
+                bracketStack.pop()
+              }
+              else if (yaccLines[currentLine][currentChar] === '{') {
+                bracketStack.push('{')
+              }
+              currentChar++
+              if (currentChar === yaccLines[currentLine].length) {
+                currentChar = 0
+                currentLine++
+                currentAction += '\n'
+              }
+            } while (bracketStack.length)
+            if (currentChar === yaccLines[currentLine].length) {
+              currentChar = 0
+              currentLine++
+            }
           }
           nonTerminatorSet.add(leftItemName)
           productionList.push(new Production(leftItemName, currentProduction, priorityMap))
+          actionList.push(currentAction.substring(1))
           if (yaccLines[currentLine][currentChar] === ';') {
             break
           }
@@ -344,13 +379,19 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
         }
         break
       case YACCPART.POSTDECLARE:
+        if (yaccLines[currentLine] === '%%') {
+          currentState = YACCPART.ACTIONDEF
+          break
+        }
         postDeclare.push(yaccLines[currentLine])
         break
+      case YACCPART.ACTIONDEF:
+
     }
     currentLine++
   }
   let first = FIRST(productionList, nonTerminatorSet, terminatorSet)
-  let result = getLR1DFA(productionList, first, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap)
+  let result = getLR1DFA(productionList, first, terminatorSet, nonTerminatorSet, leftSet, rightSet, priorityMap, actionList)
   return [result, postDeclare]
   // let c = CLOSURE(new LR1Collection([new LR1Item(productionList[0], 0, '')]), productionList, first)
   // let follow = FOLLOW(productionList, nonTerminatorSet, terminatorSet, first, '__SEU_YACC_START')

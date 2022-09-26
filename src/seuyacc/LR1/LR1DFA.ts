@@ -9,11 +9,13 @@ export class LR1DFA {
   private reduceActionList: ReduceAction[]
   private stateStack: number[] = [0]
   private astNodeStack: ASTNode[] = []
+  private restoreList: Set<number>
 
-  constructor(action: Map<string, Action>[], goto: Map<string, number>[], reduceActionList: ReduceAction[]) {
+  constructor(action: Map<string, Action>[], goto: Map<string, number>[], reduceActionList: ReduceAction[], restoreList: Set<number>) {
     this.action = action
     this.goto = goto
     this.reduceActionList = reduceActionList
+    this.restoreList = restoreList
   }
 
   public transfer(token: string, yylval: any) {
@@ -50,6 +52,18 @@ export class LR1DFA {
     this.astNodeStack.push(ASTNode.fromTerminator(token, yylval))
   }
 
+  public restore(): void {
+    let topState = this.stateStack[this.stateStack.length - 1]
+    while (!this.restoreList.has(topState)) {
+      topState = this.stateStack.pop() as number
+      if (topState === undefined) {
+        throw new Error()
+      }
+    }
+    console.log(this.reduceActionList[topState].action)
+    this.transfer('error', '')
+  }
+
   /**
    * 如果[A -> `alpha`.a`beta`, b]，并且`GOTO(i, a) = j`
    */
@@ -61,7 +75,9 @@ export class LR1DFA {
     nonTerminatorSet: Set<string>,
     leftSet: Set<string>,
     rightSet: Set<string>,
-    priorityMap: Map<string, number>
+    priorityMap: Map<string, number>,
+    actionList: string[],
+    restoreList: number[]
   ): LR1DFA {
     let action: Map<string, Action>[]
       = new Array(lr1CollectionList.length)
@@ -151,20 +167,22 @@ export class LR1DFA {
         }
       })
     }
-    return new LR1DFA(action, goto, productionList.map(production => {
+    return new LR1DFA(action, goto, productionList.map((production, index) => {
       let leftToken = production.getLeft()
       let rightItems = production.getRight()
       if (rightItems.length === 1 && rightItems[0] === '') {
         return {
           leftToken: leftToken,
-          rightItemCount: 0
+          rightItemCount: 0,
+          action: actionList[index]
         }
       }
       return {
         leftToken: leftToken,
-        rightItemCount: rightItems.length
+        rightItemCount: rightItems.length,
+        action: actionList[index]
       }
-    }))
+    }), new Set(restoreList))
   }
 
   public serializeToSchema(): LR1DFASchema {
@@ -184,15 +202,18 @@ export class LR1DFA {
       }
       goto.push(ans)
     })
+    let r: number[] = []
+    this.restoreList.forEach(value => r.push(value))
     return {
       action: action,
       goto: goto,
-      reduceAction: this.reduceActionList
+      reduceAction: this.reduceActionList,
+      restoreList: r
     }
   }
 
   public static deserializeFromSchema(schema: LR1DFASchema): LR1DFA {
-    let { action, goto, reduceAction } = schema
+    let { action, goto, reduceAction, restoreList} = schema
     let actionMapList: Map<string, Action>[] = []
     let gotoMapList: Map<string, number>[] = []
     action.forEach(value => {
@@ -205,6 +226,6 @@ export class LR1DFA {
       value.forEach(({ token, to }) => gotoMap.set(token, to))
       gotoMapList.push(gotoMap)
     })
-    return new LR1DFA(actionMapList, gotoMapList, reduceAction)
+    return new LR1DFA(actionMapList, gotoMapList, reduceAction, new Set(restoreList))
   }
 }
