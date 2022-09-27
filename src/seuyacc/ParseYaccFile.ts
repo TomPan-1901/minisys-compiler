@@ -14,7 +14,7 @@ let [dfa, postDeclare] = parseYacc(yaccContent)
 let test = LR1DFA.deserializeFromSchema(dfa.serializeToSchema())
 content.push(...postDeclare)
 content.push(
-`
+  `
 class ASTNode {
     constructor(label, attributes, child) {
         this.label = label;
@@ -61,7 +61,7 @@ class LR1DFA {
             return this.astNodeStack.pop();
         }
         while (currentAction.action === 'reduce') {
-            let { leftToken, rightItemCount } = this.reduceActionList[currentAction.target];
+            let { leftToken, rightItemCount, action } = this.reduceActionList[currentAction.target];
             let children = [];
             for (let i = 0; i < rightItemCount; i++) {
                 children.push(this.astNodeStack.pop());
@@ -70,6 +70,10 @@ class LR1DFA {
             let currentTopState = this.stateStack[this.stateStack.length - 1];
             this.astNodeStack.push(ASTNode.fromNonTerminator(leftToken, children.reverse()));
             this.stateStack.push(this.goto[currentTopState].get(leftToken));
+            let $ = children.map(({attributes}) => attributes)
+            let $$ = this.astNodeStack[this.astNodeStack.length - 1].attributes
+            eval(action)
+            this.astNodeStack[this.astNodeStack.length - 1].attributes = $$
             topState = this.stateStack[this.stateStack.length - 1];
             currentAction = this.action[topState].get(token);
             if (!currentAction) {

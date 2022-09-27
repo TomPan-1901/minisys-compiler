@@ -280,7 +280,7 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
         }
         while (!inQuote && yaccLines[currentLine][currentChar] !== ';') {
           let currentProduction: string[] = []
-          let currentAction =''
+          let currentAction = ''
           while (inQuote ||
             (yaccLines[currentLine][currentChar] !== '|' &&
               yaccLines[currentLine][currentChar] !== ';')
@@ -296,27 +296,23 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
             }
             if (yaccLines[currentLine][currentChar] === '\'') {
               inQuote = !inQuote
-              currentChar++
-              if (currentChar === yaccLines[currentLine].length) {
-                currentChar = 0
-                currentLine++
-              }
-              continue
-            }
-            if (inQuote) {
-              terminatorSet.add(yaccLines[currentLine][currentChar])
-              currentProduction.push(yaccLines[currentLine][currentChar])
             }
             else {
-              let currentProductionName = ''
-              while (currentChar < yaccLines[currentLine].length &&
-                yaccLines[currentLine][currentChar] !== ' ' &&
-                yaccLines[currentLine][currentChar] !== '\t' &&
-                yaccLines[currentLine][currentChar] !== '|'
-              )
-                currentProductionName += yaccLines[currentLine][currentChar++]
-              if (currentProductionName.length > 0)
-                currentProduction.push(currentProductionName)
+              if (inQuote) {
+                terminatorSet.add(yaccLines[currentLine][currentChar])
+                currentProduction.push(yaccLines[currentLine][currentChar])
+              }
+              else {
+                let currentProductionName = ''
+                while (currentChar < yaccLines[currentLine].length &&
+                  yaccLines[currentLine][currentChar] !== ' ' &&
+                  yaccLines[currentLine][currentChar] !== '\t' &&
+                  yaccLines[currentLine][currentChar] !== '|'
+                )
+                  currentProductionName += yaccLines[currentLine][currentChar++]
+                if (currentProductionName.length > 0)
+                  currentProduction.push(currentProductionName)
+              }
             }
             do {
               if (currentChar === yaccLines[currentLine].length) {
@@ -331,7 +327,7 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
                 }
               }
             } while (yaccLines[currentLine][currentChar] === ' ' || yaccLines[currentLine][currentChar] === '\t')
-            if (yaccLines[currentLine][currentChar] !== '{')
+            if (inQuote || yaccLines[currentLine][currentChar] !== '{')
               continue
             let bracketStack: string[] = []
             do {
@@ -356,7 +352,7 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
           }
           nonTerminatorSet.add(leftItemName)
           productionList.push(new Production(leftItemName, currentProduction, priorityMap))
-          actionList.push(currentAction.substring(1))
+          actionList.push(currentAction)
           if (yaccLines[currentLine][currentChar] === ';') {
             break
           }
