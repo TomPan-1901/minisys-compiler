@@ -350,6 +350,9 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
               currentLine++
             }
           }
+          if (currentProduction.length === 0) {
+            currentProduction.push('')
+          }
           nonTerminatorSet.add(leftItemName)
           productionList.push(new Production(leftItemName, currentProduction, priorityMap))
           actionList.push(currentAction)
