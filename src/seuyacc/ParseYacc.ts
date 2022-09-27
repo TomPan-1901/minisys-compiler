@@ -111,7 +111,7 @@ let CLOSURE = (
       })
     idx++
   }
-  return ans
+  return ans.generateCore()
 }
 
 let GOTO = (
