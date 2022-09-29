@@ -3,7 +3,7 @@ import { NFA } from './NFA'
 import { DFA } from './DFA'
 import { DFANodeSchema } from './DFANodeSchema'
 
-const ALLSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#%'()*+,-./:;<=>\?[\\]^{|}_ \n\t\v\f~&"
+const ALLSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#%'()*+,-./:;<=>\?[\\]^{|}_ \n\t\v\f~&$"
 
 let handleQuote = (regDef: Map<string, string>): Map<string, string> => {
   const escapeChars = new Set<string>(['.', '|', '*', '(', ')', '+', '?', '{', '}', '[', ']'])
