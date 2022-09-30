@@ -241,7 +241,20 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
         }
         else if (wordsList[0] === '%right') {
           for (let i = 1; i < wordsList.length; i++) {
+            if (wordsList[i][0] === '\'' && wordsList[i][wordsList[i].length - 1] === '\'') {
+              let innerString = wordsList[i].substring(1, wordsList[i].length - 1)
+              if (innerString === '\\\'') {
+                rightSet.add('\'')
+                priorityMap.set('\'', currentLine)
+              }
+              else if (innerString.length === 1) {
+                rightSet.add(innerString)
+                priorityMap.set(innerString, currentLine)
+              }
+              continue
+            }
             rightSet.add(wordsList[i])
+            priorityMap.set(wordsList[i], currentLine)
           }
         }
         break
