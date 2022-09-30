@@ -523,7 +523,7 @@ export let parseLex = (lexContent: string): [string[], DFANodeSchema[], Map<stri
             currentChar++
           }
           let tempAction = ''
-          while (stack && currentLine < lexLines.length) {
+          while (stack.length > 0 && currentLine < lexLines.length) {
             if (lexLines[currentLine][currentChar] === '{' && !inQuote) {
               stack.push('{')
             }
@@ -531,8 +531,11 @@ export let parseLex = (lexContent: string): [string[], DFANodeSchema[], Map<stri
               if (stack.length === 0) {
                 console.log('Error: no match {')
               }
-              else {
+              else if (stack.length === 1 ) {
                 currentAction.push(tempAction)
+                stack.pop()
+              }
+              else {
                 stack.pop()
               }
             }
@@ -555,7 +558,7 @@ export let parseLex = (lexContent: string): [string[], DFANodeSchema[], Map<stri
               break
             }
           }
-          actions.set(regKey, currentAction.join(';'))
+          actions.set(regKey, currentAction.join('\n'))
         }
         break
       case LEXPART.POSTDECLARE:
