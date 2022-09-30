@@ -6,8 +6,20 @@ export class Production {
 
   constructor(left: string, right: string[], priorityMap?: Map<string, number>) {
     this.left = left
-    this.right = right
+    this.right = [...right]
     if (priorityMap === undefined) {
+      return
+    }
+    if (this.right[this.right.length - 2] === '%prec') {
+      if ((priorityMap as Map<string, number>).has(this.right[this.right.length - 1])) {
+        this.priority = (priorityMap as Map<string, number>).get(this.right[this.right.length - 1])
+        this.priorityTerminator = this.right[this.right.length - 1]
+        this.right.pop()
+        this.right.pop()
+      }
+      else {
+        throw new Error()
+      }
       return
     }
     for (let i = right.length - 1; i >= 0; i--) {
