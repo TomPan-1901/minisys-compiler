@@ -87,14 +87,28 @@ let CLOSURE = (
   let visitedNonTerminator: Set<string> = new Set()
   while (idx < ans.getItem().length) {
     let header = ans.getItem()[idx].getHeader()
-    let next = ans.getItem()[idx].getNext()?.getHeader()
+    let nextItem = ans.getItem()[idx].getNext()
     let firstBetaAlpha: Set<string> = new Set()
-    if (!next) {
+    if (nextItem === null) {
       firstBetaAlpha.add(ans.getItem()[idx].getExpect())
     }
     else {
-      firstMap.get(next)?.forEach(value => firstBetaAlpha.add(value))
-      firstBetaAlpha.delete('')
+      let items = nextItem.getProduction().getRight().slice(nextItem.getDot())
+      let flag = true
+      for (let i = 0; i < items.length; i++) {
+        if (!(firstMap.get(items[i]) as Set<string>).has('')) {
+          flag = false
+          firstMap.get(items[i])?.forEach(value => firstBetaAlpha.add(value))
+          break
+        }
+        else {
+          firstMap.get(items[i])?.forEach(value => firstBetaAlpha.add(value))
+          firstBetaAlpha.delete('')
+        }
+      }
+      if (flag) {
+        firstBetaAlpha.add(ans.getItem()[idx].getExpect())
+      }
     }
     if (header === null) {
       idx++
