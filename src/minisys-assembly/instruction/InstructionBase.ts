@@ -1,4 +1,4 @@
-abstract class InstructionBase {
+export abstract class InstructionBase {
   protected instruction: Buffer
 
   constructor() {
@@ -11,5 +11,3 @@ abstract class InstructionBase {
 
   public abstract getDebugInfo(): string
 }
-
-export default InstructionBase

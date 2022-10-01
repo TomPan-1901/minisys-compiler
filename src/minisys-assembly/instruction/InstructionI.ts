@@ -1,6 +1,6 @@
-import InstructionBase from "./InstructionBase";
+import { InstructionBase } from "./InstructionBase";
 
-class InstructionI extends InstructionBase{
+export class InstructionI extends InstructionBase{
 
   public getDebugInfo(): string {
     return ''
@@ -15,5 +15,3 @@ class InstructionI extends InstructionBase{
     this.instruction.writeUint32BE(instruction)
   }
 }
-
-export default InstructionI
