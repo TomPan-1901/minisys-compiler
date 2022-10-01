@@ -1,6 +1,6 @@
-import InstructionBase from "./InstructionBase";
+import { InstructionBase } from "./InstructionBase";
 
-class InstructionR extends InstructionBase{
+export class InstructionR extends InstructionBase{
   public getDebugInfo(): string {
     return ''
   }

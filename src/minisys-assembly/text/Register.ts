@@ -17,4 +17,10 @@ class Register {
   public static getRegisterAlias(n: number): string {
     return Register.registerAlias[n]
   }
+
+  public static getRegisterId(registerName: string): number {
+    return Register.registerAlias.findIndex(value => value === registerName)
+  }
 }
+
+export default Register
