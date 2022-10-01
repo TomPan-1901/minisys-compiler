@@ -401,6 +401,7 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
           } while (yaccLines[currentLine][currentChar] === ' ' || yaccLines[currentLine][currentChar] === '\t')
           if (yaccLines[currentLine][currentChar] === ';') {
             productionList.push(new Production(leftItemName, [''], priorityMap))
+            actionList.push(currentAction)
           }
         }
         break
