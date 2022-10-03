@@ -112,7 +112,8 @@ while (true) {
     try {
        __lr1DFA.transfer(token, YYLVAL())
     }
-    catch {
+    catch (e){
+      console.log(e)
        __lr1DFA.restore()
     }
   }
