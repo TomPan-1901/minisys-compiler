@@ -1,14 +1,50 @@
-import { InstructionBase } from "./InstructionBase";
+import { getHigh6OpCode, getRLow6OpCode, getRegisterId } from "../utils";
+import { AbstractInstruction } from "./AbstractInstruction";
 
-export class InstructionJ extends InstructionBase{
+type InstructionJParameterType = {
+  op: string,
+  address: number | string
+}
+export class InstructionJ extends AbstractInstruction{
+  private op: string
+  private address: string | number
+
+  constructor({op, address}: InstructionJParameterType) {
+    super()
+    if (op === undefined || address === undefined) {
+      throw new Error()
+    }
+    this.op = op
+    this.address = address
+  }
+
   public getDebugInfo(): string {
     return ''
   }
-  constructor(op: number, address: number) {
-    super()
+
+  public getRawInstruction(): number {
+    if (typeof(this.address) === 'string' || this.address as any instanceof String) {
+      throw new Error(`Unresolved variable ${this.address}`)
+    }
     let instruction = 
-    (op << 26) + 
-    address
-    this.instruction.writeUInt32BE(instruction)
+    (getHigh6OpCode(this.op) << 26 >>> 0) + 
+    this.address
+    return instruction
+  }
+
+  public getOp(): string {
+    return this.op
+  }
+
+  public setOp(op: string): void {
+    this.op = op
+  }
+
+  public getAddress(): string | number {
+    return this.address
+  }
+
+  public setAddress(address: string | number): void {
+    this.address = address
   }
 }

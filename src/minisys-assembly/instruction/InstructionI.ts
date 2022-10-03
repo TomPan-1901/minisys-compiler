@@ -1,17 +1,77 @@
-import { InstructionBase } from "./InstructionBase";
+import { getHigh6OpCode, getRLow6OpCode, getRegisterId } from "../utils";
+import { AbstractInstruction } from "./AbstractInstruction";
 
-export class InstructionI extends InstructionBase{
+type InstructionIParameterType = {
+  op: string,
+  rs: string,
+  rt: string,
+  immediate: string | number
+}
+export class InstructionI extends AbstractInstruction{
+
+  private op: string
+  private rs: string
+  private rt: string
+  private immediate: string | number
+
+  constructor({op, rs, rt, immediate}: InstructionIParameterType) {
+    super()
+    if (op === undefined || rs === undefined || rt === undefined || immediate === undefined) {
+      throw new Error()
+    }
+    this.op = op
+    this.rs = rs
+    this.rt = rt
+    this.immediate = immediate
+    
+  }
 
   public getDebugInfo(): string {
     return ''
   }
-  constructor(op: number, rs: number, rt: number, immediate: number) {
-    super()
+
+  public getRawInstruction(): number {
+    let immediate = this.immediate
+    if (typeof(immediate) === 'string') {
+      throw new Error(`Unsolved mark ${immediate}`)
+    }
     let instruction = 
-    (op << 26) + // 5 + 5 + 16
-    (rs << 21) + // 5 + 16
-    (rt << 16) + // 16
-    immediate
-    this.instruction.writeUint32BE(instruction)
+    (getHigh6OpCode(this.op) << 26 >>> 0) + // 5 + 5 + 16
+    (getRegisterId(this.rs) << 21 >>> 0) + // 5 + 16
+    (getRegisterId(this.rt) << 16 >>> 0) + // 16
+    immediate >>> 0 & 0xffff
+    return instruction
+  }
+
+  public setImmediate(immediate: string | number): void {
+    this.immediate = immediate
+  }
+
+  public getImmediate(): string | number {
+    return this.immediate
+  }
+
+  public getOp(): string {
+    return this.op
+  }
+  
+  public setOp(op: string): void {
+    this.op = op
+  }
+
+  public getRs(): string {
+    return this.rs
+  }
+  
+  public setRs(rs: string): void {
+    this.rs = rs
+  }
+
+  public getRt(): string {
+    return this.rs
+  }
+  
+  public setRt(rt: string): void {
+    this.rt = rt
   }
 }
