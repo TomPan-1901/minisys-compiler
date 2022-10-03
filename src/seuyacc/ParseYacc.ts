@@ -358,6 +358,10 @@ export let parseYacc = (yaccContent: string): [LR1DFA, string[]] => {
               continue
             let bracketStack: string[] = []
             do {
+              if (yaccLines[currentLine].length === 0) {
+                currentLine++
+                continue
+              }
               currentAction += yaccLines[currentLine][currentChar]
               if (yaccLines[currentLine][currentChar] === '}') {
                 bracketStack.pop()
