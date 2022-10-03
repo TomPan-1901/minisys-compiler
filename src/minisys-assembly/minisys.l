@@ -4,6 +4,8 @@
 
 T_DATA .data
 T_COMMA ,
+T_LPARA \(
+T_RPARA \)
 T_TEXT .text
 T_COLON :
 T_ENDL [\n\t\r]+
@@ -41,6 +43,8 @@ T_ASCIINUM [^ \n\r\t]
 
 {T_DATA} {return "T_DATA"}
 {T_COMMA} {return "T_COMMA"}
+{T_LPARA} {return "T_LPARA"}
+{T_RPARA} {return "T_RPARA"}
 {T_TEXT} {return "T_TEXT"}
 {T_COLON} {return "T_COLON"}
 {T_ENDL} {return "T_ENDL"}
