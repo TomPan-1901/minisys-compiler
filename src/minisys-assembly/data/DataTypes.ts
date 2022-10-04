@@ -1,10 +1,66 @@
 export class Data {
   private segmentStartAddress: number
-  private dataSegment: DataSegment[]
+  private variables: Variable[]
 
-  constructor(segmentStartAddress: number, data: DataSegment[]) {
+  constructor(segmentStartAddress: number, variables: Variable[]) {
     this.segmentStartAddress = segmentStartAddress
-    this.dataSegment = data
+    this.variables = variables
+  }
+
+  public generateMinisysRAM(): [Buffer, Map<string, number>] {
+    let ram = Buffer.alloc(64 * 1024)
+    let variableAddress: Map<string, number> = new Map()
+    let ramPointer = this.segmentStartAddress
+    this.variables.forEach(variable => {
+      let dataSegments = variable.getData()
+      let name = variable.getName()
+      variableAddress.set(name, ramPointer)
+      dataSegments.forEach(segment => {
+        let type = segment.getType()
+        let data = segment.getData()
+        switch (type) {
+          case "byte":
+            data.forEach(byteNumber => {
+              if ((byteNumber >>> 0 & 0xff) !== byteNumber >>> 0) {
+                throw new Error()
+              }
+              ram.writeUint8(byteNumber >>> 0, ramPointer)
+              ramPointer += 1
+            })
+            break
+          case "half":
+            while ((ramPointer & 0x1) !== 0) {
+              ramPointer++
+            }
+            data.forEach(halfNumber => {
+              if ((halfNumber >>> 0 & 0xffff) !== halfNumber >>> 0) {
+                throw new Error()
+              }
+              ram.writeUint16LE(halfNumber >>> 0, ramPointer)
+              ramPointer += 2
+            })
+            break
+          case "word":
+            while ((ramPointer & 0b11) !== 0) {
+              ramPointer++
+            }
+            data.forEach(wordNumber => {
+              if ((wordNumber >>> 0 & 0xffffffff) !== wordNumber >>> 0) {
+                throw new Error()
+              }
+              ram.writeUInt32LE(wordNumber >>> 0, ramPointer)
+              ramPointer += 4
+            })
+            break
+          case "align":
+            break
+          case "space":
+            ramPointer += data[0]
+            break
+        }
+      })
+    })
+    return [ram, variableAddress]
   }
 
   public getSegmentStartAddress(): number {
@@ -15,14 +71,15 @@ export class Data {
     this.segmentStartAddress = segmentStartAddress
   }
 
-  public getDataSegment(): DataSegment[] {
-    return this.dataSegment
+  public getVariables(): Variable[] {
+    return this.variables
   }
 
-  public setDataSegment(dataSegment: DataSegment[]): void {
-    this.dataSegment = dataSegment
+  public setVariables(variables: Variable[]): void {
+    this.variables = variables
   }
 }
+
 export class Variable {
   private data: DataSegment[]
   private name: string
@@ -35,7 +92,7 @@ export class Variable {
   public getData(): DataSegment[] {
     return this.data
   }
-  
+
   public setData(data: DataSegment[]): void {
     this.data = data
   }
@@ -58,12 +115,12 @@ export class DataSegment {
     this.data = data
   }
 
-  public getType(): 'word' | 'half' | 'byte' | 'align' | 'space'{
+  public getType(): 'word' | 'half' | 'byte' | 'align' | 'space' {
     return this.type
   }
 
   public setType(type: 'word' | 'half' | 'byte' | 'align' | 'space'): void {
-    this.type = type  
+    this.type = type
   }
 
   public getData(): number[] {
