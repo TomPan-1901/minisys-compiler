@@ -1,4 +1,4 @@
-%token T_DATA T_ENDL T_NUM T_IDNAME T_COLON T_WORD T_COMMA
+%token T_DATA T_ENDL T_NUM T_IDNAME T_COLON T_WORD T_COMMA T_BYTE
 %token T_SPACE T_ALIGN T_TEXT T_ERET T_SYSCALL T_BREAK
 %token T_REG T_RCOM T_SRCOM T_JBCOM T_JCOM T_HALF T_PCOM
 %token T_DRCOM T_BZICOM T_BICOM T_LWICOM T_SICOM T_ICOM T_SLLRCOM T_NOP
@@ -9,16 +9,16 @@
 %%
 
 N_PRO
- : N_DATA N_TEXT
+ : N_DATA N_TEXT {$$ = {data: $[0], text: $[1]}}
  ;
 
 N_DATA
- : N_DATASEG N_VARS
- |
+ : N_DATASEG N_VARS {$$ = new Data($[0], $[1])}
+ | '' {$$ = new Data(0, [])}
  ;
 
 N_DATASEG
- : T_DATA N_SEGADDR T_ENDL
+ : T_DATA N_SEGADDR T_ENDL {$$ = $[1]}
  ;
 
 N_SEGADDR
@@ -27,73 +27,73 @@ N_SEGADDR
  ;
 
 N_VARS
- : N_VAR N_VARS
- |
+ : N_VAR N_VARS {$$ = [$[0], ...$[1]]}
+ | '' {$$ = []}
  ;
 
 N_VAR
- : T_IDNAME T_COLON N_VARDATA
+ : T_IDNAME T_COLON N_VARDATA {$$ = new Variable($[0], $[2])}
  ;
 
 N_VARDATA
- : N_WORDDATA T_ENDL N_VARDATA
- | N_HALFDATA T_ENDL N_VARDATA
- | N_BYTEDATA T_ENDL N_VARDATA
- | N_SORADATA T_ENDL N_VARDATA
- |
+ : N_WORDDATA T_ENDL N_VARDATA {$$ = [$[0], ...$[2]]}
+ | N_HALFDATA T_ENDL N_VARDATA {$$ = [$[0], ...$[2]]}
+ | N_BYTEDATA T_ENDL N_VARDATA {$$ = [$[0], ...$[2]]}
+ | N_SORADATA T_ENDL N_VARDATA {$$ = [$[0], ...$[2]]}
+ | '' {$$ = []}
  ;
 
 N_WORDDATA
- : T_WORD N_WORDNUM N_WORDSNUM
+ : T_WORD N_WORDNUM N_WORDSNUM {$$ = new DataSegment('word', [...$[1], ...$[2]])}
  ;
 
 N_WORDNUM
- : T_NUM N_REPEAT
+ : T_NUM N_REPEAT {$$ = new Array($[1]).fill($[0])}
  ;
 
 N_REPEAT
- : T_COLON T_NUM
- |
+ : T_COLON T_NUM {$$ = $[1]}
+ | '' {$$ = 1}
  ;
 
 N_WORDSNUM
- : T_COMMA N_WORDNUM N_WORDSNUM
- |
+ : T_COMMA N_WORDNUM N_WORDSNUM {$$ = [...$[1], ...$[2]]}
+ | '' {$$ = []}
  ;
 
 N_HALFDATA
- : T_NUM N_HALFNUM N_HALFSNUM
+ : T_HALF N_HALFNUM N_HALFSNUM {$$ = new DataSegment('half', [...$[1], ...$[2]])}
  ;
 
 N_HALFNUM
- : T_NUM N_REPEAT
+ : T_NUM N_REPEAT {$$ = new Array($[1]).fill($[0])}
  ;
 
 N_HALFSNUM
- : T_COMMA N_HALFNUM N_HALFSNUM
- |
+ : T_COMMA N_HALFNUM N_HALFSNUM {$$ = [...$[1], ...$[2]]}
+ | '' {$$ = []}
  ;
 
 N_BYTEDATA
- : T_NUM N_BYTENUM N_BYTESNUM
+ : T_BYTE N_BYTENUM N_BYTESNUM {$$ = new DataSegment('byte', [...$[1], ...$[2]])}
  ;
 
 N_BYTENUM
- : T_NUM N_REPEAT
+ : T_NUM N_REPEAT {$$ = new Array($[1]).fill($[0])}
  ;
 
 N_BYTESNUM
- : T_COMMA N_BYTENUM N_BYTESNUM
- |
+ : T_COMMA N_BYTENUM N_BYTESNUM {$$ = [...$[1], ...$[2]]}
+ | '' {$$ = []}
  ;
 
 N_SORADATA
- : N_SORA T_NUM
+ : N_SORA T_NUM {$$ = new DataSegment($[0], $[1])}
  ;
 
 N_SORA
- : T_SPACE
- | T_ALIGN
+ : T_SPACE {$$ = $[0]}
+ | T_ALIGN {$$ = $[0]}
  ;
 
 N_TEXT
@@ -325,5 +325,6 @@ const { InstructionI } = require('../build/minisys-assembly/instruction/Instruct
 const { InstructionJ } = require('../build/minisys-assembly/instruction/InstructionJ')
 const { getRegisterId, getHigh6OpCode, getRLow6OpCode, solveJBCOM, solveSRCOM } = require('../build/minisys-assembly/utils')
 const { Order, Text } = require('../build/minisys-assembly/text/TextTypes')
+const { DataSegment, Variable, Data } = require('../build/minisys-assembly/Data/DataTypes')
 
 let segmentIdMap = new Map()

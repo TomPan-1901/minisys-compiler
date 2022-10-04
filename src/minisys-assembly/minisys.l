@@ -87,4 +87,5 @@ T_ASCIINUM [^ \n\r\t]
 {T_ASCIINUM} {return "T_ASCIINUM"}
 
 %%
+print = () => {}
 //
