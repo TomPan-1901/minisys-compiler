@@ -4,4 +4,5 @@ export abstract class AbstractInstruction {
 
   public abstract getRawInstruction(): number
 
+  public abstract getOp(): string
 }

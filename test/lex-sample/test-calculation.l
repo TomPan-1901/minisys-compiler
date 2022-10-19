@@ -3,6 +3,7 @@
 %}
 
 id [0-9]+
+ENDL [\t\n\r]+
 
 %%
 
@@ -10,9 +11,20 @@ id [0-9]+
   yylval = parseInt(yytext)
   return "id"
 }
+{ENDL} {
+  return "ENDL"
+}
 
 "*" {
   return "*"
+}
+
+"(" {
+  return "("
+}
+
+")" {
+  return ")"
 }
 
 "+" {
