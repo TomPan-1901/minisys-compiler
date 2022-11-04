@@ -9,7 +9,7 @@
 %%
 
 N_PRO
- : N_DATA N_TEXT {$$ = {data: $[0], text: $[1]}}
+ : N_DATA N_TEXT {$$ = solveVariableName({data: $[0], text: $[1]})}
  ;
 
 N_DATA
@@ -323,7 +323,7 @@ const { yylex, YYLVAL } = require('./asm-lex')
 const { InstructionR } = require('../build/minisys-assembly/instruction/InstructionR')
 const { InstructionI } = require('../build/minisys-assembly/instruction/InstructionI')
 const { InstructionJ } = require('../build/minisys-assembly/instruction/InstructionJ')
-const { getRegisterId, getHigh6OpCode, getRLow6OpCode, solveJBCOM, solveSRCOM } = require('../build/minisys-assembly/utils')
+const { getRegisterId, getHigh6OpCode, getRLow6OpCode, solveJBCOM, solveSRCOM, solveVariableName } = require('../build/minisys-assembly/utils')
 const { Order, Text } = require('../build/minisys-assembly/text/TextTypes')
 const { DataSegment, Variable, Data } = require('../build/minisys-assembly/Data/DataTypes')
 

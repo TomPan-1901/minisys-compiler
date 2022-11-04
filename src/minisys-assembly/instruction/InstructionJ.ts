@@ -1,4 +1,6 @@
-import { getHigh6OpCode, getRLow6OpCode, getRegisterId } from "../utils";
+import { Data } from "../data/DataTypes";
+import { Text } from "../text/TextTypes";
+import { getHigh6OpCode } from "../utils";
 import { AbstractInstruction } from "./AbstractInstruction";
 
 type InstructionJParameterType = {
@@ -8,6 +10,16 @@ type InstructionJParameterType = {
 export class InstructionJ extends AbstractInstruction{
   private op: string
   private address: string | number
+
+  public resolveSymbols(symbolTable: Data, textTable: Text): void {
+    if (typeof this.address === 'string') {
+      const realAddress = textTable.segmentAddressRecord[this.address]
+      console.log(`replace ${this.address} to ${realAddress}`)
+      this.address = realAddress
+      if (this.address === undefined)
+        throw new Error()
+    }
+  }
 
   constructor({op, address}: InstructionJParameterType) {
     super()

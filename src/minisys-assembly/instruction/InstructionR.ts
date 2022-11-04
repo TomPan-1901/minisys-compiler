@@ -1,3 +1,4 @@
+import { Data } from "../data/DataTypes";
 import { getHigh6OpCode, getRLow6OpCode, getRegisterId } from "../utils";
 import { AbstractInstruction } from "./AbstractInstruction";
 type InstructionRParameterType = {
@@ -9,6 +10,9 @@ type InstructionRParameterType = {
   func?: number
 }
 export class InstructionR extends AbstractInstruction{
+  public resolveSymbols(_symbolTable: Data): void {
+    return
+  }
   private op: string
   private rs: string
   private rt: string

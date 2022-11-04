@@ -1,10 +1,41 @@
 export class Data {
   private segmentStartAddress: number
   private variables: Variable[]
+  public variableRecord: Record<string, number>
 
   constructor(segmentStartAddress: number, variables: Variable[]) {
     this.segmentStartAddress = segmentStartAddress
     this.variables = variables
+    this.variableRecord = {}
+    let currentAddress = this.segmentStartAddress
+    variables.forEach(v => {
+      const name = v.getName()
+      const data = v.getData()
+      this.variableRecord[name] = currentAddress
+      data.forEach(d => {
+        const type = d.getType()
+        const size = d.getData().length
+        switch (type)
+        {
+          case "byte":
+            currentAddress += size * 1
+            break
+          case "half":
+            currentAddress += size * 2
+            break
+          case "space":
+            currentAddress += size * 1
+            break
+          case "word":
+            currentAddress += size * 4
+            break
+          case "align":
+            const mod = 1 << d.getData()[0]
+            while (currentAddress % mod)
+              currentAddress++
+        }
+      })
+    })
   }
 
   public generateMinisysRAM(): [Buffer, Map<string, number>] {

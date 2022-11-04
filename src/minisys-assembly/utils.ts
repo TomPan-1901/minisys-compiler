@@ -3,6 +3,8 @@ import { GeneralHigh6OpCode, RLow6OpCode } from './OpCode'
 import { AbstractInstruction } from './instruction/AbstractInstruction'
 import { InstructionR } from './instruction/InstructionR'
 import { InstructionI } from './instruction/InstructionI'
+import { Data } from './data/DataTypes'
+import { Text } from './text/TextTypes'
 export let getRegisterId = (registerName: string): number => {
   if (registerName.charCodeAt(1) >= '0'.charCodeAt(0) && registerName.charCodeAt(1) <= '9'.charCodeAt(0)) {
     return parseInt(registerName.substring(1))
@@ -127,5 +129,19 @@ export let solveSRCOM = (op: string, reg: string): AbstractInstruction => {
       })
     default:
       throw new Error()
+  }
+}
+type ProgramType = {
+  data: Data,
+  text: Text
+}
+export let solveVariableName = ({data, text}: ProgramType) => {
+  let code = text.getCode()
+  code.forEach(c => {
+    c.getInstruction().resolveSymbols(data, text)
+  })
+  return {
+    data,
+    text
   }
 }
