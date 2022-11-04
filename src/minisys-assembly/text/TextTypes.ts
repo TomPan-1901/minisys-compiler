@@ -5,10 +5,25 @@ import { InstructionJ } from "../instruction/InstructionJ"
 export class Text {
   private segmentStartAddress: number
   private code: Order[]
+  public segmentAddressRecord: Record<string, number>
 
   constructor(segmentStartAddress: number, code: Order[]) {
     this.segmentStartAddress = segmentStartAddress
     this.code = code
+    this.segmentAddressRecord = {}
+    let currentAddress = this.segmentStartAddress
+    this.code.forEach(c => {
+      const name = c.getSegmentID()
+      if (name) {
+        console.log(`name ${name}, address ${currentAddress}`)
+        this.segmentAddressRecord[name] = currentAddress
+      }
+      currentAddress++
+    })
+  }
+
+  public getCode(): Order[] {
+    return this.code
   }
   
   public generateMinisysROM(variableAddressMap: Map<string, number>): Buffer {
