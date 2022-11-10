@@ -10,6 +10,6 @@ export class IRVarialble {
     this.id = id
     this.name = name
     this.type = type
-    this.scope = scope ? scope : []
+    this.scope = scope ? [...scope] : []
   }
 }

@@ -1,16 +1,32 @@
-import { AssertsThisTypePredicate } from "typescript";
 import ASTNode from "../../entities/ASTNode";
 import { IRArray } from "./IRArray";
 import { IRFunction } from "./IRFunction";
-import { IRVarialble } from "./IRVariable";
+import { IRVarialble, MiniCType } from "./IRVariable";
 import { Quadruple } from "./Quadruple";
+
+export const GlobalScope = [0]
+export const LabelId  = '__label__'
 
 export class IRGenerator {
   private functions: IRFunction[]
   private variables: (IRVarialble | IRArray)[]
   private quadruples: Quadruple[]
+  private scopeStack: number[]
+  private scopeId: number[]
 
-  start(node: ASTNode) {
+  constructor() {
+    this.functions = []
+    this.variables = []
+    this.quadruples = []
+    this.scopeStack = []
+    this.scopeId = []
+  }
+
+  newVariableId(): string {
+    return `__MiniC_Variable_${this.variables.length}`
+  }
+
+  public start(node: ASTNode) {
     this.parseProgram(node.child[0])
   }
 
@@ -19,7 +35,7 @@ export class IRGenerator {
   }
 
   parseDeclList(node: ASTNode) {
-    if (node.label === 'decl_list') {
+    if (node.child[0].label === 'decl_list') {
       this.parseDeclList(node.child[0])
       this.parseDecl(node.child[1])
     }
@@ -39,8 +55,22 @@ export class IRGenerator {
 
   parseVarDecl(node: ASTNode) {
     // TODO
-    const type = this.parseTypeSpec(node.child[0])
-    const id = node.child[1]
+    const type = this.parseTypeSpec(node.child[0]) as MiniCType
+    const id = node.child[1].label
+    if (node.child[2].label === ';') { //变量
+      if (type === 'void') {
+        throw new Error('变量类型不能为void')
+      }
+      if (this.variables.some(v => v.name === id && v.scope.length === 1 && v.scope.every((v, i) => v === GlobalScope[i])))
+        throw new Error('重复定义的变量')
+      this.variables.push(new IRVarialble(this.newVariableId(), id, type, [...GlobalScope]))
+    }
+    else { //数组
+      const len = node.child[3].attributes as number
+      if (this.variables.some(v => v.scope.length === 1 && v.scope.every((v, i) => v === GlobalScope[i])))
+        throw new Error('重复定义的变量')
+      this.variables.push(new IRArray(this.newVariableId(), type, id, len, [...GlobalScope]))
+    }
   }
 
   parseTypeSpec(node: ASTNode) {
