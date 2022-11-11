@@ -1,14 +1,21 @@
-import { MiniCType } from "./IRVariable"
+import { IRArray } from "./IRArray"
+import { IRVarialble, MiniCType } from "./IRVariable"
 
 export class IRFunction {
   name: string
   returnType: MiniCType
   entryLabel: string
+  exitLabel: string
+  params: IRVarialble[]
+  localVariables: (IRVarialble | IRArray)[]
 
-  constructor(name: string, returnType: MiniCType, entryLabel: string) {
+  constructor(name: string, returnType: MiniCType, entryLabel: string, exitLabel: string) {
     this.name = name
     this.returnType = returnType
     this.entryLabel = entryLabel
+    this.exitLabel = exitLabel
+    this.params = []
+    this.localVariables = []
   }
 
   public getName(): string {
@@ -32,5 +39,9 @@ export class IRFunction {
 
   public setEntryLabel(entryLabel: string): void {
     this.entryLabel = entryLabel
+  }
+
+  public getParams(): IRVarialble[] {
+    return this.params
   }
 }
