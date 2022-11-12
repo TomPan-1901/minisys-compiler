@@ -38,8 +38,9 @@ export class Data {
     })
   }
 
-  public generateMinisysRAM(): [Buffer, Map<string, number>] {
-    let ram = Buffer.alloc(64 * 1024)
+  public generateMinisysRAM(): [ArrayBuffer, Map<string, number>] {
+    const rawRam = new ArrayBuffer(64 * 1024)
+    const ram = new DataView(rawRam)
     let variableAddress: Map<string, number> = new Map()
     let ramPointer = this.segmentStartAddress
     this.variables.forEach(variable => {
@@ -55,7 +56,7 @@ export class Data {
               if ((byteNumber >>> 0 & 0xff) !== byteNumber >>> 0) {
                 throw new Error()
               }
-              ram.writeUint8(byteNumber >>> 0, ramPointer)
+              ram.setUint8(ramPointer, byteNumber >>> 0)
               ramPointer += 1
             })
             break
@@ -67,7 +68,7 @@ export class Data {
               if ((halfNumber >>> 0 & 0xffff) !== halfNumber >>> 0) {
                 throw new Error()
               }
-              ram.writeUint16LE(halfNumber >>> 0, ramPointer)
+              ram.setUint16(ramPointer, halfNumber >>> 0)
               ramPointer += 2
             })
             break
@@ -79,7 +80,7 @@ export class Data {
               if ((wordNumber >>> 0 & 0xffffffff) !== wordNumber >>> 0) {
                 throw new Error()
               }
-              ram.writeUInt32LE(wordNumber >>> 0, ramPointer)
+              ram.setUint32(ramPointer, wordNumber >>> 0)
               ramPointer += 4
             })
             break
@@ -91,7 +92,7 @@ export class Data {
         }
       })
     })
-    return [ram, variableAddress]
+    return [rawRam, variableAddress]
   }
 
   public getSegmentStartAddress(): number {
