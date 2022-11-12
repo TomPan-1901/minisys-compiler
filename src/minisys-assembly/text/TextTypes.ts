@@ -26,8 +26,9 @@ export class Text {
     return this.code
   }
   
-  public generateMinisysROM(variableAddressMap: Map<string, number>): Buffer {
-    let rom = Buffer.alloc(64 * 1024)
+  public generateMinisysROM(variableAddressMap: Map<string, number>): ArrayBuffer {
+    const rawRom = new ArrayBuffer(64 * 1024)
+    const rom = new DataView(rawRom)
     let romPointer = this.segmentStartAddress
     let segmentAddressMap: Map<string, number> = new Map()
     const loadCommands: Set<string> = new Set([
@@ -71,10 +72,10 @@ export class Text {
       }
     })
     this.code.forEach(order => {
-      rom.writeUInt32LE(order.getInstruction().getRawInstruction(), romPointer)
+      rom.setUint32(romPointer, order.getInstruction().getRawInstruction())
       romPointer += 4
     })
-    return rom
+    return rawRom
   }
 }
 
