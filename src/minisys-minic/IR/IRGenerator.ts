@@ -16,6 +16,15 @@ export class IRGenerator {
   private scopeId: number[]
   private scopeCount: number
   private variableCount: number
+  private functionContextInfo?: {
+    entryLabel: string,
+    exitLabel: string,
+    functionName: string
+  }
+  private loopContext: {
+    loopLabel: string,
+    breakLabel: string
+  }[] = []
 
   constructor() {
     this.functions = []
@@ -209,6 +218,9 @@ export class IRGenerator {
       case '[':
         break
       case 'expr':
+        const address = this.parseExpr(node.child[1])
+        const result = this.parseExpr(node.child[3])
+        this.quadruples.push(new Quadruple('assignMem', result, '', address))
         break
       case '(':
         break
@@ -216,15 +228,24 @@ export class IRGenerator {
   }
 
   parseWhileStmt(node: ASTNode) {
-
+    const expr = this.parseExpr(node.child[2])
+    const loopLabel = `${expr}_loop`
+    const breakLabel = `${expr}_break`
+    this.loopContext.push({ loopLabel, breakLabel })
+    this.quadruples.push(new Quadruple('setLabel', '', '', loopLabel))
+    this.quadruples.push(new Quadruple('jFalse', expr, '', breakLabel))
+    this.parseStmt(node.child[4])
+    this.quadruples.push(new Quadruple('j', '', '', loopLabel))
+    this.quadruples.push(new Quadruple('setLabel', '', '', breakLabel))
+    this.loopContext.pop()
   }
 
-  parseWhileIdent(node: ASTNode) {
-
+  parseWhileIdent(_node: ASTNode) {
+    return
   }
 
   parseBlockStmt(node: ASTNode) {
-
+    this.parseStmtList(node.child[1])
   }
 
   parseCompoundStmt(node: ASTNode) {
@@ -253,7 +274,14 @@ export class IRGenerator {
   }
 
   parseIfStmt(node: ASTNode) {
-
+    const expr = this.parseExpr(node.child[2])
+    this.quadruples.push(new Quadruple('setLabel', '', '', `${expr}_true`))
+    this.quadruples.push(new Quadruple('jFalse', expr, '', `${expr}_false`))
+    this.parseStmt(node.child[4])
+    this.quadruples.push(new Quadruple('setLabel', '', '', `${expr}_false`))
+    if (node.child.length === 7) {
+      this.parseStmt(node.child[6])
+    }
   }
 
   parseReturnStmt(node:  ASTNode) {
@@ -310,6 +338,7 @@ export class IRGenerator {
       const right = this.parseExpr(node.child[2])
       const target = this.newVariableId()
       this.quadruples.push(new Quadruple(node.child[1].label, left, right, target))
+      return target
     }
     // 二元运算
     throw new Error()
@@ -327,11 +356,20 @@ export class IRGenerator {
 
   }
 
-  parseContinueStmt(node: ASTNode) {
-
+  parseContinueStmt(_node: ASTNode) {
+    if (this.loopContext.length === 0) {
+      throw new Error('非法的continue')
+    }
+    const { loopLabel } = this.loopContext[this.loopContext.length - 1]
+    this.quadruples.push(new Quadruple('j', '', '', loopLabel))
   }
 
-  parseBreakStmt(node: ASTNode) {
+  parseBreakStmt(_node: ASTNode) {
+    if (this.loopContext.length === 0) {
+      throw new Error('非法的break')
+    }
+    const { breakLabel } = this.loopContext[this.loopContext.length - 1]
+    this.quadruples.push(new Quadruple('j', '', '', breakLabel))
 
   }
 }
