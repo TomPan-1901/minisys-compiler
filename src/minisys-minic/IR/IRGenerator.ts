@@ -42,7 +42,7 @@ export class IRGenerator {
     console.log(this.quadruples)
   }
 
-  getVariableByName(vName: string): IRVarialble {
+  getVariableByName(vName: string): IRVarialble | IRArray {
     const currentScope = [...this.scopeStack]
     let scopes: number[][] = []
     while (currentScope.length) {
@@ -126,6 +126,11 @@ export class IRGenerator {
 
     const entryLabel = `__MiniC_Entry_${id}`
     const exitLabel = `__MiniC_Exit_${id}`
+    this.functionContextInfo =  {
+      entryLabel: entryLabel,
+      exitLabel: exitLabel,
+      functionName: id
+    }
 
     this.functions.push(new IRFunction(id, returnType, entryLabel, exitLabel))
     this.parseParams(node.child[3], id)
@@ -216,13 +221,20 @@ export class IRGenerator {
         this.quadruples.push(new Quadruple('assign', right, '', left.id))
         break
       case '[':
-        break
+        const index = this.parseExpr(node.child[2])
+        const arrayVar = this.getVariableByName(node.child[0].attributes)
+        const rightResult = this.parseExpr(node.child[5])
+        this.quadruples.push(new Quadruple('assignArray', index, rightResult, arrayVar.id))
       case 'expr':
         const address = this.parseExpr(node.child[1])
         const result = this.parseExpr(node.child[3])
         this.quadruples.push(new Quadruple('assignMem', result, '', address))
         break
       case '(':
+        const functionName = node.child[0].attributes
+        const args = this.parseArgs(node.child[2])
+        const target = this.newVariableId()
+        this.quadruples.push(new Quadruple('call', functionName, args.join(','), target))
         break
     }
   }
@@ -285,7 +297,7 @@ export class IRGenerator {
   }
 
   parseReturnStmt(node:  ASTNode) {
-
+    console.log(this.functionContextInfo)
   }
 
   parseExpr(node: ASTNode) {
@@ -312,7 +324,11 @@ export class IRGenerator {
       }
       else {
         if (node.child[1].label === '[') {
-
+          const arrayBase = this.getVariableByName(node.child[0].attributes) as IRArray
+          const index = this.parseExpr(node.child[2])
+          const result = this.newVariableId()
+          this.quadruples.push(new Quadruple('readArray', arrayBase.getId(), index, result))
+          return result
         }
         else if (node.child[1].label === '(') {
           // TODO
@@ -348,12 +364,21 @@ export class IRGenerator {
     return node.child[0].attributes as number
   }
 
-  parseArgList(node: ASTNode) {
-
+  parseArgList(node: ASTNode): string[] {
+    if (node.child[0].label === 'expr') {
+      return [this.parseExpr(node.child[0])]
+    }
+    else {
+      return [...this.parseArgList(node.child[0]), this.parseExpr(node.child[2])]
+    }
   }
 
   parseArgs(node: ASTNode) {
-
+    if (node.child.length > 0)
+      return this.parseArgList(node.child[0])
+    else {
+      return []
+    }
   }
 
   parseContinueStmt(_node: ASTNode) {
