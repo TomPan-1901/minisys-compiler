@@ -292,6 +292,7 @@ export class IRGenerator {
     
     const loopLabel = `${this.jumpLabelCount}_loop`
     const breakLabel = `${this.jumpLabelCount}_break`
+    this.jumpLabelCount++
     this.jumpContextStack.push({trueLabel: loopLabel, falseLabel: breakLabel})
     const expr = this.parseExpr(node.child[2], true)
     this.loopContext.push({ loopLabel, breakLabel })
