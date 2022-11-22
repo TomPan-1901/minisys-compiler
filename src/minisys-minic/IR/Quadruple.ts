@@ -11,6 +11,10 @@ export class Quadruple {
     this.result = result
   }
 
+  public generateString(): string {
+    return `(${this.op}, ${this.arg1}, ${this.arg2}, ${this.result})`
+  }
+
   public getOp(): string {
     return this.op
   }
