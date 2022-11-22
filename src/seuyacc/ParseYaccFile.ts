@@ -19,7 +19,7 @@ class ASTNode {
     constructor(label, attributes, child) {
         this.label = label;
         this.child = child ? child : [];
-        this.attributes = attributes ? attributes : undefined;
+        this.attributes = attributes;
     }
     static fromTerminator(terminator, attributes) {
         return new ASTNode(terminator, attributes);

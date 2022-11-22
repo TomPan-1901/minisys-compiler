@@ -44,6 +44,7 @@ export class IRGenerator {
     this.quadruples = []
     this.scopeStack = [0]
     this.scopeId = []
+    this.basicBlock = []
     this.scopeCount = 1
     this.variableCount = 0
     this.jumpContextStack = []
@@ -86,7 +87,8 @@ export class IRGenerator {
   debugInfo() {
     console.log(this.functions)
     console.log(this.variables)
-    console.log(this.quadruples)
+    console.log(this.basicBlock)
+    console.log(this.quadruples.map(v => v.generateString()).join('\n'))
   }
 
   getVariableByName(vName: string): IRVarialble | IRArray {
