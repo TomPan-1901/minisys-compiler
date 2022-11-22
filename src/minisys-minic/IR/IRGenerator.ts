@@ -7,15 +7,21 @@ import { Quadruple } from "./Quadruple";
 
 export const GlobalScope = [0]
 export const LabelId  = '__label__'
+type JumpContext = {
+  trueLabel: string,
+  falseLabel: string
+}
 
 export class IRGenerator {
   private functions: IRFunction[]
   private variables: (IRVarialble | IRArray)[]
   private quadruples: Quadruple[]
   private scopeStack: number[]
+  private jumpContextStack: JumpContext[]
   private scopeId: number[]
   private scopeCount: number
   private variableCount: number
+  private jumpLabelCount: number
   private functionContextInfo?: {
     entryLabel: string,
     exitLabel: string,
@@ -34,6 +40,8 @@ export class IRGenerator {
     this.scopeId = []
     this.scopeCount = 1
     this.variableCount = 0
+    this.jumpContextStack = []
+    this.jumpLabelCount = 0
   }
 
   debugInfo() {
@@ -240,12 +248,15 @@ export class IRGenerator {
   }
 
   parseWhileStmt(node: ASTNode) {
-    const expr = this.parseExpr(node.child[2])
-    const loopLabel = `${expr}_loop`
-    const breakLabel = `${expr}_break`
+    
+    const loopLabel = `${this.jumpLabelCount}_loop`
+    const breakLabel = `${this.jumpLabelCount}_break`
+    this.jumpContextStack.push({trueLabel: loopLabel, falseLabel: breakLabel})
+    const expr = this.parseExpr(node.child[2], true)
     this.loopContext.push({ loopLabel, breakLabel })
+    if (expr !== '')
+      this.quadruples.push(new Quadruple('jFalse', expr, '', breakLabel))
     this.quadruples.push(new Quadruple('setLabel', '', '', loopLabel))
-    this.quadruples.push(new Quadruple('jFalse', expr, '', breakLabel))
     this.parseStmt(node.child[4])
     this.quadruples.push(new Quadruple('j', '', '', loopLabel))
     this.quadruples.push(new Quadruple('setLabel', '', '', breakLabel))
@@ -286,21 +297,35 @@ export class IRGenerator {
   }
 
   parseIfStmt(node: ASTNode) {
-    const expr = this.parseExpr(node.child[2])
-    this.quadruples.push(new Quadruple('setLabel', '', '', `${expr}_true`))
-    this.quadruples.push(new Quadruple('jFalse', expr, '', `${expr}_false`))
+    const trueLabel = `${this.jumpLabelCount}_true`
+    const falseLabel = `${this.jumpLabelCount}_false`
+    this.jumpLabelCount++
+    this.jumpContextStack.push({ trueLabel, falseLabel })
+    const expr = this.parseExpr(node.child[2], true)
+    if (expr !== '')
+      this.quadruples.push(new Quadruple('jFalse', expr, '', falseLabel))
+    this.quadruples.push(new Quadruple('setLabel', '', '', trueLabel))
     this.parseStmt(node.child[4])
-    this.quadruples.push(new Quadruple('setLabel', '', '', `${expr}_false`))
+    this.quadruples.push(new Quadruple('setLabel', '', '', falseLabel))
     if (node.child.length === 7) {
       this.parseStmt(node.child[6])
     }
+    this.jumpContextStack.pop()
   }
 
   parseReturnStmt(node:  ASTNode) {
     console.log(this.functionContextInfo)
+    this.functions.find(v => v.name === this.functionContextInfo?.functionName)
+    if (node.child.length === 2) {
+      this.quadruples.push(new Quadruple('returnVoid', '', '', this.functionContextInfo!.exitLabel))
+    }
+    else {
+      const expr = this.parseExpr(node.child[2])
+      this.quadruples.push(new Quadruple('returnExpr', expr, '', this.functionContextInfo!.exitLabel))
+    }
   }
 
-  parseExpr(node: ASTNode) {
+  parseExpr(node: ASTNode, inJumpContext=false) {
     // 整数字面量
     if (node.child[0].label === 'int_literal') {
       const resultVariable = this.newVariableId()
@@ -310,7 +335,9 @@ export class IRGenerator {
 
     // 括号表达式
     if (node.child[0].label === '(') {
-      const result = this.parseExpr(node.child[1])
+      const result = this.parseExpr(node.child[1], inJumpContext)
+      if (inJumpContext)
+        return ''
       const target = this.newVariableId()
       this.quadruples.push(new Quadruple('assign', result, '', target))
       return target
@@ -341,6 +368,39 @@ export class IRGenerator {
       }
     }
 
+    if (inJumpContext) {
+      const { trueLabel, falseLabel } = this.jumpContextStack[this.jumpContextStack.length - 1]
+      if (node.child.length === 3 && node.child[1].label === 'OR') {
+        const blockJumpLabel = `${this.jumpLabelCount}_false`
+        this.jumpLabelCount++
+        this.jumpContextStack.push({trueLabel: trueLabel, falseLabel: blockJumpLabel})
+        const left = this.parseExpr(node.child[0], true) as string
+        if (left !== '')
+          this.quadruples.push(new Quadruple('jTrue', left, '', trueLabel))
+        this.jumpContextStack.pop()
+        this.quadruples.push(new Quadruple('setLabel', '', '', blockJumpLabel))
+        const right = this.parseExpr(node.child[2], true) as string
+        if (right !== '')
+          this.quadruples.push(new Quadruple('jTrue', right, '', trueLabel))
+        this.quadruples.push(new Quadruple('j', '', '', falseLabel))
+        return ''
+      }
+      else if (node.child.length === 3 && node.child[1].label === 'AND') {
+        const blockJumpLabel = `${this.jumpLabelCount}_false`
+        this.jumpLabelCount++
+        this.jumpContextStack.push({trueLabel: blockJumpLabel, falseLabel: falseLabel})
+        const left = this.parseExpr(node.child[0], true) as string
+        if (left !== '')
+          this.quadruples.push(new Quadruple('jFalse', left, '', falseLabel))
+        this.jumpContextStack.pop()
+        this.quadruples.push(new Quadruple('setLabel', '', '', blockJumpLabel))
+        const right = this.parseExpr(node.child[2], true)
+        if (right !== '')
+          this.quadruples.push(new Quadruple('jFalse', right, '', falseLabel))
+        this.quadruples.push(new Quadruple('j', '', '', trueLabel))
+        return ''
+      }
+    }
     // 一元运算
     if (node.child.length === 2) {
       const result = this.parseExpr(node.child[1])
