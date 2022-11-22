@@ -12,6 +12,11 @@ type JumpContext = {
   falseLabel: string
 }
 
+type BasicBlock = {
+  id: number,
+  content: Quadruple[]
+}
+
 export class IRGenerator {
   private functions: IRFunction[]
   private variables: (IRVarialble | IRArray)[]
@@ -31,6 +36,7 @@ export class IRGenerator {
     loopLabel: string,
     breakLabel: string
   }[] = []
+  private basicBlock: BasicBlock[]
 
   constructor() {
     this.functions = []
@@ -42,6 +48,39 @@ export class IRGenerator {
     this.variableCount = 0
     this.jumpContextStack = []
     this.jumpLabelCount = 0
+  }
+
+  divideBasicBlocks() {
+    let startCommand = []
+    let jNext = false
+    for (let i = 0; i < this.quadruples.length; i++) {
+      if (i === 0) {
+        startCommand.push(i)
+        continue
+      }
+      if (this.quadruples[i].getOp() === 'setLabel' && this.quadruples[i].getResult().startsWith('__MiniC_Entry_')) {
+        startCommand.push(i)
+        continue
+      }
+      const op = this.quadruples[i].getOp()
+      if (op === 'j' || op === 'jFalse' || op === 'jTrue') {
+        startCommand.push(this.quadruples.findIndex(v => v.op === 'setLabel' && v.result === this.quadruples[i].result))
+        continue
+      }
+      if (jNext) {
+        startCommand.push(i)
+        jNext = false
+        continue
+      }
+    }
+    startCommand = [...new Set(startCommand)].sort((a, b) => a - b)
+    for (let i = 0; i < startCommand.length; i++) {
+      let temp: Quadruple[] = []
+      for (let j = startCommand[i]; j < (startCommand[i + 1] || this.quadruples.length); j++) {
+        temp.push(this.quadruples[j])
+      }
+      this.basicBlock.push({id: i, content: temp})
+    }
   }
 
   debugInfo() {
