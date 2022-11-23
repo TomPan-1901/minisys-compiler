@@ -1,4 +1,4 @@
-import { collapseTextChangeRangesAcrossMultipleVersions } from "typescript";
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import ASTNode from "../../entities/ASTNode";
 import { IRArray } from "./IRArray";
 import { IRFunction } from "./IRFunction";
@@ -9,7 +9,8 @@ export const GlobalScope = [0]
 export const LabelId  = '__label__'
 type JumpContext = {
   trueLabel: string,
-  falseLabel: string
+  falseLabel: string,
+  used: boolean
 }
 
 type BasicBlock = {
@@ -293,7 +294,7 @@ export class IRGenerator {
     const loopLabel = `${this.jumpLabelCount}_loop`
     const breakLabel = `${this.jumpLabelCount}_break`
     this.jumpLabelCount++
-    this.jumpContextStack.push({trueLabel: loopLabel, falseLabel: breakLabel})
+    this.jumpContextStack.push({trueLabel: loopLabel, falseLabel: breakLabel, used: false})
     const expr = this.parseExpr(node.child[2], true)
     this.loopContext.push({ loopLabel, breakLabel })
     if (expr !== '')
@@ -342,7 +343,7 @@ export class IRGenerator {
     const trueLabel = `${this.jumpLabelCount}_true`
     const falseLabel = `${this.jumpLabelCount}_false`
     this.jumpLabelCount++
-    this.jumpContextStack.push({ trueLabel, falseLabel })
+    this.jumpContextStack.push({ trueLabel, falseLabel, used: false })
     const expr = this.parseExpr(node.child[2], true)
     if (expr !== '')
       this.quadruples.push(new Quadruple('jFalse', expr, '', falseLabel))
@@ -415,31 +416,43 @@ export class IRGenerator {
       if (node.child.length === 3 && node.child[1].label === 'OR') {
         const blockJumpLabel = `${this.jumpLabelCount}_false`
         this.jumpLabelCount++
-        this.jumpContextStack.push({trueLabel: trueLabel, falseLabel: blockJumpLabel})
+        this.jumpContextStack.push({trueLabel: trueLabel, falseLabel: blockJumpLabel, used: false})
         const left = this.parseExpr(node.child[0], true) as string
-        if (left !== '')
+        if (left !== '') {
           this.quadruples.push(new Quadruple('jTrue', left, '', trueLabel))
+          this.jumpContextStack[this.jumpContextStack.length - 2].used = true
+        }
+        if (this.jumpContextStack[this.jumpContextStack.length - 1].used)
+          this.quadruples.push(new Quadruple('setLabel', '', '', blockJumpLabel))
         this.jumpContextStack.pop()
-        this.quadruples.push(new Quadruple('setLabel', '', '', blockJumpLabel))
         const right = this.parseExpr(node.child[2], true) as string
-        if (right !== '')
+        if (right !== '') {
           this.quadruples.push(new Quadruple('jTrue', right, '', trueLabel))
+          this.jumpContextStack[this.jumpContextStack.length - 1].used = true
+        }
         this.quadruples.push(new Quadruple('j', '', '', falseLabel))
+        this.jumpContextStack[this.jumpContextStack.length - 1].used = true
         return ''
       }
       else if (node.child.length === 3 && node.child[1].label === 'AND') {
         const blockJumpLabel = `${this.jumpLabelCount}_false`
         this.jumpLabelCount++
-        this.jumpContextStack.push({trueLabel: blockJumpLabel, falseLabel: falseLabel})
+        this.jumpContextStack.push({trueLabel: blockJumpLabel, falseLabel: falseLabel, used: false})
         const left = this.parseExpr(node.child[0], true) as string
-        if (left !== '')
+        if (left !== '') {
+          this.jumpContextStack[this.jumpContextStack.length - 2].used = true
           this.quadruples.push(new Quadruple('jFalse', left, '', falseLabel))
+        }
+        if (this.jumpContextStack[this.jumpContextStack.length - 1].used)
+          this.quadruples.push(new Quadruple('setLabel', '', '', blockJumpLabel))
         this.jumpContextStack.pop()
-        this.quadruples.push(new Quadruple('setLabel', '', '', blockJumpLabel))
         const right = this.parseExpr(node.child[2], true)
-        if (right !== '')
+        if (right !== '') {
+          this.jumpContextStack[this.jumpContextStack.length - 1].used = true
           this.quadruples.push(new Quadruple('jFalse', right, '', falseLabel))
+        }
         this.quadruples.push(new Quadruple('j', '', '', trueLabel))
+        this.jumpContextStack[this.jumpContextStack.length - 1].used = true
         return ''
       }
     }
