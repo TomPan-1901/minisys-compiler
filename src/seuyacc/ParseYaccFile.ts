@@ -70,10 +70,10 @@ class LR1DFA {
             let currentTopState = this.stateStack[this.stateStack.length - 1];
             this.astNodeStack.push(ASTNode.fromNonTerminator(leftToken, children.reverse()));
             this.stateStack.push(this.goto[currentTopState].get(leftToken));
-            let $ = children.map(({attributes}) => attributes)
-            let $$ = this.astNodeStack[this.astNodeStack.length - 1].attributes
+            let $attr = children.map(({attributes}) => attributes)
+            let $$attr = this.astNodeStack[this.astNodeStack.length - 1].attributes
             eval(action)
-            this.astNodeStack[this.astNodeStack.length - 1].attributes = $$
+            this.astNodeStack[this.astNodeStack.length - 1].attributes = $$attr
             topState = this.stateStack[this.stateStack.length - 1];
             currentAction = this.action[topState].get(token);
             if (!currentAction) {
