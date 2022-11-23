@@ -56,6 +56,10 @@ export class IRGenerator {
     let startCommand = []
     let jNext = false
     for (let i = 0; i < this.quadruples.length; i++) {
+      if (jNext) {
+        startCommand.push(i)
+        jNext = false
+      }
       if (i === 0) {
         startCommand.push(i)
         continue
@@ -67,11 +71,7 @@ export class IRGenerator {
       const op = this.quadruples[i].getOp()
       if (op === 'j' || op === 'jFalse' || op === 'jTrue') {
         startCommand.push(this.quadruples.findIndex(v => v.op === 'setLabel' && v.result === this.quadruples[i].result))
-        continue
-      }
-      if (jNext) {
-        startCommand.push(i)
-        jNext = false
+        jNext = true
         continue
       }
     }
