@@ -1,4 +1,5 @@
 import { Data } from "../data/DataTypes";
+import { Text } from "../text/TextTypes";
 import { getHigh6OpCode, getRegisterId } from "../utils";
 import { AbstractInstruction } from "./AbstractInstruction";
 
@@ -9,10 +10,12 @@ type InstructionIParameterType = {
   immediate: string | number
 }
 export class InstructionI extends AbstractInstruction{
-  public resolveSymbols(symbolTable: Data): void {
+  public resolveSymbols(symbolTable: Data, text: Text): void {
     if (typeof this.immediate === 'string')
     {
-      const realImmediate = symbolTable.variableRecord[this.immediate]
+      let realImmediate = symbolTable.variableRecord[this.immediate]
+      if (realImmediate === undefined)
+        realImmediate = text.segmentAddressRecord[this.immediate]
       console.log(`replace ${this.immediate} to ${realImmediate}`)
       this.immediate = realImmediate
       if (this.immediate === undefined)
