@@ -26,7 +26,7 @@ export class IRFunction {
     this.name = name
   }
 
-  public getReturnType(): string {
+  public getReturnType(): MiniCType {
     return this.returnType
   }
 
@@ -43,5 +43,9 @@ export class IRFunction {
 
   public getParams(): IRVarialble[] {
     return this.params
+  }
+
+  public getLocalVariables(): (IRVarialble | IRArray)[] {
+    return this.localVariables
   }
 }
