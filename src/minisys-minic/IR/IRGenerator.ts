@@ -52,6 +52,13 @@ export class IRGenerator {
     this.jumpLabelCount = 0
   }
 
+  public getFunctions(): IRFunction[] {
+    return this.functions
+  }
+
+  public getVariables(): (IRVarialble | IRArray)[] {
+    return this.variables
+  }
   divideBasicBlocks() {
     let startCommand = []
     let jNext = false
@@ -183,11 +190,11 @@ export class IRGenerator {
     }
 
     this.functions.push(new IRFunction(id, returnType, entryLabel, exitLabel))
+    this.scopeStack.push(this.scopeCount++)
     this.parseParams(node.child[3], id)
     if (node.child[5].label === ';') {
       return
     }
-    this.scopeStack.push(this.scopeCount++)
     this.quadruples.push(new Quadruple('setLabel', '', '', entryLabel))
     this.parseCompoundStmt(node.child[5])
     this.quadruples.push(new Quadruple('setLabel', '', '', exitLabel))
