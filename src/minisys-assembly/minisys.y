@@ -235,12 +235,30 @@ N_COM
     })
   }
  | T_DRCOM T_REG T_COMMA T_REG {
-    $$attr = new InstructionR({
-      op: $attr[0],
-      rs: $attr[1],
-      rt: $attr[3],
-      rd: '$0'
-    })
+    if ($[0] === 'mult' || $[0] === 'multu' || $[0] === 'div' || $[0] === 'divu') {
+      $$attr = new InstructionR({
+        op: $attr[0],
+        rs: $attr[1],
+        rt: $attr[3],
+        rd: '$0'
+      })
+    }
+    else if ($[0] === 'mfc0' || $[0] === 'mtc0') {
+      $$attr = new InstructionR({
+        op: $attr[0],
+        rs: '$0',
+        rt: $attr[1],
+        rd: $attr[3]
+      })
+    }
+    else if ($[0] === 'jalr') {
+      $$attr = new InstructionR({
+        op: $attr[0],
+        rs: $attr[3],
+        rt: '$0',
+        rd: '$attr[1]'
+      })
+    }
   }
  | T_BREAK {
     $$attr = new InstructionR({

@@ -137,8 +137,8 @@ type ProgramType = {
 }
 export let solveVariableName = ({data, text}: ProgramType) => {
   let code = text.getCode()
-  code.forEach(c => {
-    c.getInstruction().resolveSymbols(data, text)
+  code.forEach((c, i) => {
+    c.getInstruction().resolveSymbols(data, text, i)
   })
   return {
     data,

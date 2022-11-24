@@ -9,5 +9,5 @@ export abstract class AbstractInstruction {
 
   public abstract getOp(): string
 
-  public abstract resolveSymbols(symbolTable: Data, text: Text): void;
+  public abstract resolveSymbols(symbolTable: Data, text: Text, index: number): void;
 }
