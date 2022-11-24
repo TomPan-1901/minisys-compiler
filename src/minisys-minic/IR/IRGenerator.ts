@@ -211,7 +211,7 @@ export class IRGenerator {
     // TODO
     if (node.child[0].label === 'param_list') {
       this.parseParamList(node.child[0], functionName)
-      this.parseParam(node.child[1], functionName)
+      this.parseParam(node.child[2], functionName)
     }
     else {
       this.parseParam(node.child[0], functionName)
@@ -220,8 +220,9 @@ export class IRGenerator {
 
   parseParam(node: ASTNode, functionName: string) {
     const type = this.parseTypeSpec(node.child[0]) as MiniCType
-    const id = node.child[1].label
+    const id = node.child[1].attributes
     const variable = new IRVarialble(this.newVariableId(), id, type, this.scopeStack)
+    this.variables.push(variable)
     this.functions.find(v => v.name === functionName)?.getParams().push(variable)
   }
 
@@ -363,7 +364,7 @@ export class IRGenerator {
       this.quadruples.push(new Quadruple('returnVoid', '', '', this.functionContextInfo!.exitLabel))
     }
     else {
-      const expr = this.parseExpr(node.child[2])
+      const expr = this.parseExpr(node.child[1])
       this.quadruples.push(new Quadruple('returnExpr', expr, '', this.functionContextInfo!.exitLabel))
     }
   }

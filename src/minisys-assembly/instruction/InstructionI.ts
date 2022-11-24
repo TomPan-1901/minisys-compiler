@@ -10,12 +10,14 @@ type InstructionIParameterType = {
   immediate: string | number
 }
 export class InstructionI extends AbstractInstruction{
-  public resolveSymbols(symbolTable: Data, text: Text): void {
+  public resolveSymbols(symbolTable: Data, text: Text, index: number): void {
     if (typeof this.immediate === 'string')
     {
       let realImmediate = symbolTable.variableRecord[this.immediate]
-      if (realImmediate === undefined)
-        realImmediate = text.segmentAddressRecord[this.immediate]
+      if (realImmediate === undefined) {
+        // offset = target - PC - 4
+        realImmediate = ((text.segmentAddressRecord[this.immediate] * 4 - index * 4 - 4) >>> 0 >> 2) & 0xffff
+      }
       console.log(`replace ${this.immediate} to ${realImmediate}`)
       this.immediate = realImmediate
       if (this.immediate === undefined)
@@ -53,7 +55,7 @@ export class InstructionI extends AbstractInstruction{
     (getHigh6OpCode(this.op) << 26 >>> 0) + // 5 + 5 + 16
     (getRegisterId(this.rs) << 21 >>> 0) + // 5 + 16
     (getRegisterId(this.rt) << 16 >>> 0) + // 16
-    immediate >>> 0 & 0xffff
+    (immediate >>> 0 & 0xffff)
     return instruction
   }
 
