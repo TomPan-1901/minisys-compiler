@@ -252,7 +252,7 @@ export class IRGenerator {
     const id = node.child[1].attributes
     const variable = new IRVarialble(this.newVariableId(), id, type, this.scopeStack)
     this.variables.push(variable)
-    this.functions.find(v => v.name === functionName)?.getParams().push(variable)
+    this.functions.find(v => v.name === functionName)!.getParams().push(variable)
   }
 
   parseStmtList(node: ASTNode) {
@@ -437,12 +437,6 @@ export class IRGenerator {
           const args = this.parseArgs(node.child[2])
           const target = this.newVariableId()
           this.quadruples.push(new Quadruple('call', functionName, args.join(','), target))
-          return target
-        }
-        else if (node.child[1].label === '[') {
-          const result = this.parseExpr(node.child[2])
-          const target = this.newVariableId()
-          this.quadruples.push(new Quadruple('[]', this.getVariableByName(node.child[0].attributes).id, result, target))
           return target
         }
       }
