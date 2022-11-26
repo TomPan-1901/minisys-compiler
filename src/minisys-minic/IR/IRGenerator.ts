@@ -6,7 +6,7 @@ import { IRVarialble, MiniCType } from "./IRVariable";
 import { Quadruple } from "./Quadruple";
 
 export const GlobalScope = [0]
-export const LabelId  = '__label__'
+export const LabelId = '__label__'
 type JumpContext = {
   trueLabel: string,
   falseLabel: string,
@@ -59,6 +59,15 @@ export class IRGenerator {
   public getVariables(): (IRVarialble | IRArray)[] {
     return this.variables
   }
+
+  public getBasicBlocks(): readonly BasicBlock[] {
+    return this.basicBlock
+  }
+
+  public getQuadruples(): readonly Quadruple[] {
+    return this.quadruples
+  }
+
   divideBasicBlocks() {
     let startCommand = []
     let jNext = false
@@ -81,6 +90,14 @@ export class IRGenerator {
         jNext = true
         continue
       }
+      if (op === 'call') {
+        jNext = true
+        continue
+      }
+      if (op === 'returnVoid' || op === 'returnExpr') { // 紧跟在一个条件或无条件转移指令之后的目标指令是一个首指令
+        jNext = true
+        continue
+      }
     }
     startCommand = [...new Set(startCommand)].sort((a, b) => a - b)
     for (let i = 0; i < startCommand.length; i++) {
@@ -88,14 +105,18 @@ export class IRGenerator {
       for (let j = startCommand[i]; j < (startCommand[i + 1] || this.quadruples.length); j++) {
         temp.push(this.quadruples[j])
       }
-      this.basicBlock.push({id: i, content: temp})
+      this.basicBlock.push({ id: i, content: temp })
     }
   }
 
   debugInfo() {
     console.log(this.functions)
     console.log(this.variables)
-    console.log(this.basicBlock)
+    console.log('Basic Blocks:')
+    this.basicBlock.forEach(b => {
+      b.content.forEach(v => console.log(v.generateString()))
+      console.log('\n')
+    })
     console.log(this.quadruples.map(v => v.generateString()).join('\n'))
   }
 
@@ -161,7 +182,7 @@ export class IRGenerator {
       this.variables.push(new IRVarialble(this.newVariableId(), id, type, [...GlobalScope]))
     }
     else { //数组
-      const len = node.child[3].attributes as number
+      const len = this.parseIntLiteral(node.child[3]) as number
       if (this.variables.some(v => v.name === id && v.scope.length === 1 && v.scope.every((v, i) => v === GlobalScope[i])))
         throw new Error('重复定义的变量')
       this.variables.push(new IRArray(this.newVariableId(), type, id, len, [...GlobalScope]))
@@ -183,26 +204,27 @@ export class IRGenerator {
 
     const entryLabel = `__MiniC_Entry_${id}`
     const exitLabel = `__MiniC_Exit_${id}`
-    this.functionContextInfo =  {
+    this.functionContextInfo = {
       entryLabel: entryLabel,
       exitLabel: exitLabel,
       functionName: id
     }
 
-    this.functions.push(new IRFunction(id, returnType, entryLabel, exitLabel))
+    const functionContext = new IRFunction(id, returnType, entryLabel, exitLabel)
+    this.functions.push(functionContext)
     this.scopeStack.push(this.scopeCount++)
     this.parseParams(node.child[3], id)
     if (node.child[5].label === ';') {
       return
     }
     this.quadruples.push(new Quadruple('setLabel', '', '', entryLabel))
-    this.parseCompoundStmt(node.child[5])
+    this.parseCompoundStmt(node.child[5], functionContext)
     this.quadruples.push(new Quadruple('setLabel', '', '', exitLabel))
 
     this.scopeStack.pop()
     return
   }
-  
+
   parseFunctionIdent(node: ASTNode) {
     return node.child[0].attributes as string
   }
@@ -272,7 +294,7 @@ export class IRGenerator {
   }
 
   parseExprStmt(node: ASTNode) {
-    switch(node.child[1].label) {
+    switch (node.child[1].label) {
       case '=':
         const left = this.getVariableByName(node.child[0].attributes)
         const right = this.parseExpr(node.child[2])
@@ -298,11 +320,11 @@ export class IRGenerator {
   }
 
   parseWhileStmt(node: ASTNode) {
-    
+
     const loopLabel = `${this.jumpLabelCount}_loop`
     const breakLabel = `${this.jumpLabelCount}_break`
     this.jumpLabelCount++
-    this.jumpContextStack.push({trueLabel: loopLabel, falseLabel: breakLabel, used: false})
+    this.jumpContextStack.push({ trueLabel: loopLabel, falseLabel: breakLabel, used: false })
     const expr = this.parseExpr(node.child[2], true)
     this.loopContext.push({ loopLabel, breakLabel })
     if (expr !== '')
@@ -322,29 +344,31 @@ export class IRGenerator {
     this.parseStmtList(node.child[1])
   }
 
-  parseCompoundStmt(node: ASTNode) {
-    this.parseLocalDecls(node.child[1])
+  parseCompoundStmt(node: ASTNode, functionContext: IRFunction) {
+    this.parseLocalDecls(node.child[1], functionContext)
     this.parseStmtList(node.child[2])
   }
 
-  parseLocalDecls(node: ASTNode) {
+  parseLocalDecls(node: ASTNode, functionContext: IRFunction) {
     if (node.child.length === 0)
       return
     if (node.child[0].label === 'local_decls') {
-      this.parseLocalDecls(node.child[0])
-      this.parseLocalDecl(node.child[1])
+      this.parseLocalDecls(node.child[0], functionContext)
+      this.parseLocalDecl(node.child[1], functionContext)
     }
     else {
-      this.parseLocalDecl(node.child[0])
+      this.parseLocalDecl(node.child[0], functionContext)
     }
   }
 
-  parseLocalDecl(node: ASTNode) {
+  parseLocalDecl(node: ASTNode, functionContext: IRFunction) {
     const type = this.parseTypeSpec(node.child[0]) as MiniCType
     const id = node.child[1].attributes as string
     if (this.variables.some(v => v.name === id && v.scope.length === this.scopeStack.length && v.scope.every((v, i) => v === this.scopeStack[i])))
       throw new Error('重复定义的变量')
-    this.variables.push(new IRVarialble(this.newVariableId(), id, type, [...this.scopeStack]))
+    const localVariable = new IRVarialble(this.newVariableId(), id, type, [...this.scopeStack])
+    functionContext.getLocalVariables().push(localVariable)
+    this.variables.push(localVariable)
   }
 
   parseIfStmt(node: ASTNode) {
@@ -364,7 +388,7 @@ export class IRGenerator {
     this.jumpContextStack.pop()
   }
 
-  parseReturnStmt(node:  ASTNode) {
+  parseReturnStmt(node: ASTNode) {
     console.log(this.functionContextInfo)
     this.functions.find(v => v.name === this.functionContextInfo?.functionName)
     if (node.child.length === 2) {
@@ -376,7 +400,7 @@ export class IRGenerator {
     }
   }
 
-  parseExpr(node: ASTNode, inJumpContext=false) {
+  parseExpr(node: ASTNode, inJumpContext = false) {
     // 整数字面量
     if (node.child[0].label === 'int_literal') {
       const resultVariable = this.newVariableId()
@@ -409,12 +433,17 @@ export class IRGenerator {
           return result
         }
         else if (node.child[1].label === '(') {
-          // TODO
+          const functionName = node.child[0].attributes
+          const args = this.parseArgs(node.child[2])
+          const target = this.newVariableId()
+          this.quadruples.push(new Quadruple('call', functionName, args.join(','), target))
+          return target
         }
         else if (node.child[1].label === '[') {
           const result = this.parseExpr(node.child[2])
           const target = this.newVariableId()
           this.quadruples.push(new Quadruple('[]', this.getVariableByName(node.child[0].attributes).id, result, target))
+          return target
         }
       }
     }
@@ -424,7 +453,7 @@ export class IRGenerator {
       if (node.child.length === 3 && node.child[1].label === 'OR') {
         const blockJumpLabel = `${this.jumpLabelCount}_false`
         this.jumpLabelCount++
-        this.jumpContextStack.push({trueLabel: trueLabel, falseLabel: blockJumpLabel, used: false})
+        this.jumpContextStack.push({ trueLabel: trueLabel, falseLabel: blockJumpLabel, used: false })
         const left = this.parseExpr(node.child[0], true) as string
         if (left !== '') {
           this.quadruples.push(new Quadruple('jTrue', left, '', trueLabel))
@@ -445,7 +474,7 @@ export class IRGenerator {
       else if (node.child.length === 3 && node.child[1].label === 'AND') {
         const blockJumpLabel = `${this.jumpLabelCount}_false`
         this.jumpLabelCount++
-        this.jumpContextStack.push({trueLabel: blockJumpLabel, falseLabel: falseLabel, used: false})
+        this.jumpContextStack.push({ trueLabel: blockJumpLabel, falseLabel: falseLabel, used: false })
         const left = this.parseExpr(node.child[0], true) as string
         if (left !== '') {
           this.jumpContextStack[this.jumpContextStack.length - 2].used = true
