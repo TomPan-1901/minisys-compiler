@@ -5,7 +5,10 @@ import { IRVarialble } from "../IR/IRVariable";
 type StackFrameType = {
   // 实参
   actualParameter: number,
-  actualParameterList: IRVarialble[],
+  actualParameterList: {
+    param: IRVarialble,
+    memoryAddress: string
+  }[]
   // 返回值
   returnValue: number,
   // 调用链，指向上一个栈顶
@@ -14,7 +17,10 @@ type StackFrameType = {
     returnAddress: 4,
   },
   localVariables: number,
-  localVariablesList: (IRVarialble | IRArray)[]
+  localVariablesList: {
+    param: (IRVarialble | IRArray),
+    memoryAddress: string
+  }[]
 }
 export class AsmGenerator {
 
@@ -66,16 +72,53 @@ export class AsmGenerator {
     if (!addressSet) {
       throw new Error()
     }
+    let memoryAddress = ''
     // 如果变量已经在寄存器中，选择这个寄存器
     for (let [address, _] of addressSet.entries()) {
       if (address.startsWith('$')) {
         return address
       }
+      else {
+        memoryAddress = address
+      }
     }
 
     // 如果变量不在寄存器中并且有可用寄存器，加入这个寄存器
 
+    const availableRegister = this.registers.find(value => !(value.startsWith('$a')) && this.registerDescriptors[value].size === 0)
+    if (availableRegister) {
+      addressSet.add(availableRegister)
+      this.registerDescriptors[availableRegister].add(variableId)
+      return availableRegister
+    }
+
     // 如果不可用，写回一个变量
+    // 找到需要写回变量最少的那个寄存器
+
+    let min = Infinity
+    let result = ''
+    this.registers.forEach(
+      value => {
+        if (value.startsWith('$a')) {
+          return
+        }
+        const variableCount = this.registerDescriptors[value].size
+        if (variableCount < min) {
+          result = value
+          min = variableCount
+        }
+      }
+    )
+    this.registerDescriptors[result as AsmGenerator["registers"][number]].forEach(
+      v => {
+        if (v.endsWith('($sp)'))
+          this.asm.push(`sw ${result}, ${v}`)
+        else {
+          this.asm.push(`sw ${result}, ${v}($zero)`)
+        }
+      }
+    )
+    return result
   }
 
   generateStackFrameInfo() {
@@ -85,31 +128,45 @@ export class AsmGenerator {
      * 控制链
      * 保存的机器状态
      * 局部数据
-     * 临时变量
      */
     const functions = this.context.getFunctions()
     functions.forEach(f => {
       // 实在参数
       const params = f.getParams()
       const actualParameter = params.length * 4
-      const returnValue = f.getReturnType() === "int" ? 4 : 0
+      const returnValue = f.getReturnType() === "int".toUpperCase() ? 4 : 0
       const controlLink = 4
       const machineState = {
         returnAddress: <const>4,
       }
-      const functionVars = f.getLocalVariables()
-      const functionParams = f.getParams()
-      const localVariables = functionVars.reduce<number>((prev, current) => {
-        if (current instanceof IRArray) {
-          return prev + current.getLen() * 4
+      const l = f.getLocalVariables().length
+      const functionVars = f.getLocalVariables().map((value, i) => {
+        return {
+          param: value,
+          memoryAddress: `${(l - 1 - i) * 4}($sp)`
         }
-        else if (current instanceof IRVarialble) {
+      })
+      const localVariables = functionVars.reduce<number>((prev, current) => {
+        if (current.param instanceof IRArray) {
+          return prev + current.param.getLen() * 4
+        }
+        else if (current.param instanceof IRVarialble) {
           return prev + 4
         }
         else {
           throw new Error('Error in local variables')
         }
       }, 0)
+      const baseOffset =
+        localVariables
+        + controlLink
+        + returnValue
+        + machineState.returnAddress
+      const paramsCount = f.getParams().length
+      const functionParams = f.getParams().map((p, i) => ({
+        param: p,
+        memoryAddress: `${baseOffset + (paramsCount - i - 1) * 4}$(sp)`
+      }))
       const generatedInfo = {
         actualParameter,
         controlLink,
@@ -157,15 +214,44 @@ export class AsmGenerator {
       const { op, arg1, arg2, result } = quadruples[i]
       if (op === 'setLabel') {
         if (result.startsWith('__MiniC_Entry_')) {
+
           currentFunction = result.slice(14)
           console.log('in funtion %s', currentFunction)
           const functionStackFrame = this.stackFrame[currentFunction]
+
+          // 计算出实在参数的地址并放到地址描述符里面
+          const actualParameterCount = functionStackFrame.actualParameterList.length
+          if (actualParameterCount < 4) {
+            for (let j = 0; j < actualParameterCount; j++) {
+              this.registerDescriptors[`$a${j as 0 | 1 | 2 | 3}`].add(functionStackFrame.actualParameterList[j].param.id)
+              const id = functionStackFrame.actualParameterList[j].param.id
+              this.addressDescriptors[id] = new Set()
+              this.addressDescriptors[id].add(`$a${j as 0 | 1 | 2 | 3}`)
+            }
+          }
+          else {
+            for (let j = 0; j < 4; j++) {
+              this.registerDescriptors[`$a${j as 0 | 1 | 2 | 3}`].add(functionStackFrame.actualParameterList[j].param.id)
+              this.addressDescriptors[functionStackFrame.actualParameterList[j].param.id].add(`$a${j as 0 | 1 | 2 | 3}`)
+            }
+            const baseOffset =
+              functionStackFrame.localVariables
+              + functionStackFrame.controlLink
+              + functionStackFrame.returnValue
+              + functionStackFrame.machineState.returnAddress
+            for (let j = 4; j < actualParameterCount; j++) {
+              this.addressDescriptors[functionStackFrame.actualParameterList[j].param.id].add(`${baseOffset + (actualParameterCount - j) * 4}$(sp)`)
+            }
+          }
+
+
+          // 计算出局部变量的位置
           for (let i = 0; i < functionStackFrame.localVariablesList.length; i++) {
             this.addressDescriptors[
-              functionStackFrame.localVariablesList[i].id
+              functionStackFrame.localVariablesList[i].param.id
             ] = new Set()
             this.addressDescriptors[
-              functionStackFrame.localVariablesList[i].id
+              functionStackFrame.localVariablesList[i].param.id
             ].add(`${functionStackFrame.localVariables - 4 * i - 4}($sp)`)
           }
           this.asm.push(`${result}:`)
@@ -175,7 +261,7 @@ export class AsmGenerator {
           console.log('exit function %s', currentFunction)
           // 移除所有的局部变量和参数
           this.stackFrame[currentFunction].actualParameterList.forEach(
-            param => {
+            ({ param }) => {
               this.registers.forEach(r => {
                 if (this.registerDescriptors[r].has(param.id)) {
                   this.registerDescriptors[r].delete(param.id)
@@ -187,8 +273,8 @@ export class AsmGenerator {
             .forEach(
               variable => {
                 this.registers.forEach(r => {
-                  if (this.registerDescriptors[r].has(variable.id)) {
-                    this.registerDescriptors[r].delete(variable.id)
+                  if (this.registerDescriptors[r].has(variable.param.id)) {
+                    this.registerDescriptors[r].delete(variable.param.id)
                   }
                 })
               })
@@ -202,7 +288,77 @@ export class AsmGenerator {
       }
       else if (op === 'assign') {
         if (constantValues[arg1]) {
-          constantValues[result] = constantValues[arg1]
+          let regId = ''
+          let memAddr = ''
+          for (let v of this.addressDescriptors[result].values()) {
+            // 如果变量已经加载入寄存器，直接写寄存器
+            if (v.startsWith('$')) {
+              regId = v
+            }
+            else {
+              memAddr = v
+            }
+          }
+          if (regId.length) {
+            if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
+              this.asm.push(`lui ${regId}, ${(constantValues[arg1] >>> 16).toString(16)}`)
+              this.asm.push(`ori ${regId}, ${(constantValues[arg1] & 0xffff).toString(16)}`)
+            }
+            else {
+              this.asm.push(`addi ${regId}, $zero, ${constantValues[arg1]}`)
+            }
+            this.addressDescriptors[result] = new Set([regId])
+          }
+          else {
+            const targetReg = this.getARegister(result)
+            if (memAddr.endsWith('($sp)'))
+              this.asm.push(`lw ${targetReg}, ${memAddr}`)
+            else
+              this.asm.push(`lw ${targetReg}, ${memAddr}($zero)`)
+
+            if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
+              this.asm.push(`lui ${memAddr}, ${(constantValues[arg1] >>> 16).toString(16)}`)
+              this.asm.push(`ori ${memAddr}, ${(constantValues[arg1] & 0xffff).toString(16)}`)
+            }
+            else {
+              this.asm.push(`addi ${memAddr}, $zero, ${constantValues[arg1]}`)
+            }
+            this.addressDescriptors[result] = new Set([targetReg])
+
+          }
+        }
+        else {
+          // 看变量位置
+          let regId = ''
+          let memAddr = ''
+          for (let v of this.addressDescriptors[arg1].values()) {
+            // 如果变量已经加载入寄存器，直接写入
+            if (v.startsWith('$')) {
+              regId = v
+            }
+            else {
+              memAddr = v
+            }
+          }
+          if (regId.length) {
+            this.registerDescriptors[regId as AsmGenerator["registers"][number]].add(result)
+            if (!this.addressDescriptors[result]) {
+              this.addressDescriptors[result] = new Set()
+            }
+            this.addressDescriptors[result].add(regId)
+          }
+          else if (memAddr.length) {
+            const targetReg = this.getARegister(result)
+            if (memAddr.endsWith('($sp)'))
+              this.asm.push(`lw ${targetReg}, ${memAddr}`)
+            else
+              this.asm.push(`lw ${targetReg}, ${memAddr}($zero)`)
+
+            if (!this.addressDescriptors[result]) {
+              this.addressDescriptors[result] = new Set()
+            }
+            this.addressDescriptors[result].add(targetReg)
+          }
         }
       }
       else if (op === 'readArray') {
@@ -216,6 +372,53 @@ export class AsmGenerator {
         const argumentList = arg2.split(',')
         console.log('call function %s', functionName)
         console.log(`arguments: ${argumentList}`)
+
+        // 方便起见先写回所有寄存器中的变量
+        Object.entries(this.registerDescriptors).forEach(
+          entry => {
+            let [key, value] = entry
+            for (let id of value.values()) {
+              // 全局变量
+              if (this.globalVariablePool[id]) {
+                this.asm.push(`sw ${key}, ${this.globalVariablePool[id]}($zero)`)
+                this.addressDescriptors[id] = new Set([this.globalVariablePool[id]])
+                this.registerDescriptors[key as AsmGenerator["registers"][number]].clear()
+                continue
+              }
+              // 局部变量
+
+              const localId = this.stackFrame[currentFunction].localVariablesList.find(({ param }) =>
+                param.id === id
+              )
+              if (localId) {
+                this.asm.push(`sw ${key}, ${localId.memoryAddress}`)
+                this.addressDescriptors[id] = new Set([localId.memoryAddress])
+                this.registerDescriptors[key as AsmGenerator["registers"][number]].clear()
+                continue
+              }
+              // 函数形参
+              const actualId = this.stackFrame[currentFunction].actualParameterList.find(({ param }) =>
+                param.id === id
+              )
+              if (actualId) {
+                this.asm.push(`sw ${key}, ${actualId.memoryAddress}`)
+                this.addressDescriptors[id] = new Set([actualId.memoryAddress])
+                this.registerDescriptors[key as AsmGenerator["registers"][number]].clear()
+                continue
+              }
+
+              throw new Error()
+            }
+          }
+        )
+
+        if (argumentList[0] === '' && argumentList.length === 1) {
+          // 调整$sp
+          this.asm.push(`addiu $sp, $sp, ${-this.getTotalStackFrameSize(functionName)}`)
+          this.asm.push(`jal __Minic_Entry_${functionName}`)
+          continue
+        }
+
         // 先传参
         const loadInto$a = (index: 1 | 2 | 3 | 0) => {
           // 先确定有没有变量被加载进这个寄存器，如果有先写回去
@@ -228,18 +431,24 @@ export class AsmGenerator {
                   memoryAddress = v
                 }
               }
-              if (memoryAddress.endsWith('($sp)')) 
+              if (memoryAddress.endsWith('($sp)'))
                 this.asm.push(`sw $a${index}, ${memoryAddress}`)
               else
                 this.asm.push(`sw $a${index}, ${k}($zero)`)
+            }
+            else {
+              throw new Error()
             }
           }
           // 如果是常数，直接加载
           if (constantValues[argumentList[index]] !== undefined) {
             if (constantValues[argumentList[index]] > 32767 || constantValues[argumentList[index]] < -32768) {
               this.asm.push(`lui $a${index}, ${(constantValues[argumentList[index]] >>> 16).toString(16)}`)
+              this.asm.push(`ori $a${index}, ${(constantValues[argumentList[index]] & 0xffff).toString(16)}`)
             }
-            this.asm.push(`ori $a${index}, ${(constantValues[argumentList[index]] & 0xffff).toString(16)}`)
+            else {
+              this.asm.push(`addi $a${index}, $zero, ${constantValues[argumentList[index]]}`)
+            }
           }
           else {
             // 如果标号已经在某个寄存器
@@ -262,7 +471,7 @@ export class AsmGenerator {
               }
               // 全局变量
               else {
-                this.asm.push(`lw $a${index}, ${this.globalVariablePool[argumentList[index]]}`)
+                this.asm.push(`lw $a${index}, ${argumentList[index]}($zero)`)
               }
             }
           }
@@ -320,16 +529,39 @@ export class AsmGenerator {
 
       }
       else if (op === 'returnVoid') {
-
+        // 写回所有的全局变量
+        Object.entries(this.addressDescriptors).forEach(
+          (entry) => {
+            let [key, value] = entry
+            if (this.globalVariablePool[key]) {
+              if (this.addressDescriptors[key].size === 1) {
+                for (let a of this.addressDescriptors[key].values()) {
+                  if (a.startsWith('$')) {
+                    this.asm.push(`sw ${a}, ${this.globalVariablePool[key]}`)
+                  }
+                }
+                this.addressDescriptors[key] = new Set([this.globalVariablePool[key]])
+              }
+            }
+          }
+        )
+        this.asm.push('jr $ra')
       }
       else if (op === 'jFalse') {
+        // 看标号位置
 
+        // 如果是常数，直接跳
+        if (constantValues[arg1]) {
+          continue
+        }
+        // 如果已经加载到寄存器
+        else if ()
       }
       else if (op === 'jTrue') {
-
+        this.asm.push(`bne `)
       }
       else if (op === 'j') {
-
+        this.asm.push(`j ${result}`)
       }
       else {
         switch (op) {
