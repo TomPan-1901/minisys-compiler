@@ -35,6 +35,7 @@ export class AsmGenerator {
   private addressDescriptors: Record<string, Set<string>>
   private globalVariablePool: Record<string, string>
   context: IRGenerator
+  currentFunction: string
 
   constructor(irContext: IRGenerator) {
     this.context = irContext
@@ -44,6 +45,7 @@ export class AsmGenerator {
     this.registerDescriptors = {} as unknown as Record<AsmGenerator["registers"][number], Set<string>>
     this.registers.forEach(v => this.registerDescriptors[v] = new Set())
     this.globalVariablePool = {}
+    this.currentFunction = ''
 
 
     this.generateStackFrameInfo()
@@ -68,6 +70,9 @@ export class AsmGenerator {
   }
 
   getARegister(variableId: string, load = false): AsmGenerator["registers"][number] {
+    const localVariables = new Set(this.stackFrame[this.currentFunction].localVariablesList.map(v => v.param.id))
+    const actualVariables = new Set(this.stackFrame[this.currentFunction].actualParameterList.map(v => v.param.id))
+    const gloabalVariables = new Set(Object.keys(this.globalVariablePool))
     let addressSet = this.addressDescriptors[variableId]
     if (!addressSet) {
       this.addressDescriptors[variableId] = new Set()
@@ -114,7 +119,16 @@ export class AsmGenerator {
         if (value.startsWith('$a')) {
           return
         }
-        const variableCount = this.registerDescriptors[value].size
+        const getRealSize = () => {
+          let result = 0
+          for (let v of this.registerDescriptors[value].values()) {
+            if (gloabalVariables.has(v) || localVariables.has(v) || actualVariables.has(v)) {
+              result += 1
+            }
+          }
+          return result
+        }
+        const variableCount = getRealSize()
         if (variableCount < min) {
           result = value
           min = variableCount
@@ -123,10 +137,13 @@ export class AsmGenerator {
     )
     this.registerDescriptors[result as AsmGenerator["registers"][number]].forEach(
       v => {
-        if (v.endsWith('($sp)'))
-          this.asm.push(`sw ${result}, ${v}`)
-        else {
-          this.asm.push(`sw ${result}, ${v}($zero)`)
+        this.addressDescriptors[v].delete(v)
+        for (let v_ of this.addressDescriptors[v].values()) {
+          if (v_.endsWith('($sp)'))
+            this.asm.push(`sw ${result}, ${v_}`)
+          else {
+            this.asm.push(`sw ${result}, ${v_}($zero)`)
+          }
         }
       }
     )
@@ -230,15 +247,14 @@ export class AsmGenerator {
   generateTextSegments() {
     const quadruples = this.context.getQuadruples()
     let constantValues: Record<string, number> = {}
-    let currentFunction = ''
     for (let i = 0; i < quadruples.length; i++) {
       const { op, arg1, arg2, result } = quadruples[i]
       if (op === 'setLabel') {
         if (result.startsWith('__MiniC_Entry_')) {
 
-          currentFunction = result.slice(14)
-          console.log('in funtion %s', currentFunction)
-          const functionStackFrame = this.stackFrame[currentFunction]
+          this.currentFunction = result.slice(14)
+          console.log('in funtion %s', this.currentFunction)
+          const functionStackFrame = this.stackFrame[this.currentFunction]
 
           // 计算出实在参数的地址并放到地址描述符里面
           const actualParameterCount = functionStackFrame.actualParameterList.length
@@ -278,10 +294,10 @@ export class AsmGenerator {
           this.asm.push(`${result}:`)
         }
         else if (result.startsWith('__MiniC_Exit_')) {
-          currentFunction = result.slice(13)
-          console.log('exit function %s', currentFunction)
+          this.currentFunction = result.slice(13)
+          console.log('exit function %s', this.currentFunction)
           // 移除所有的局部变量和参数
-          this.stackFrame[currentFunction].actualParameterList.forEach(
+          this.stackFrame[this.currentFunction].actualParameterList.forEach(
             ({ param }) => {
               this.registers.forEach(r => {
                 if (this.registerDescriptors[r].has(param.id)) {
@@ -290,7 +306,7 @@ export class AsmGenerator {
               })
             }
           )
-          this.stackFrame[currentFunction].localVariablesList
+          this.stackFrame[this.currentFunction].localVariablesList
             .forEach(
               variable => {
                 this.registers.forEach(r => {
@@ -439,7 +455,7 @@ export class AsmGenerator {
               }
               // 局部变量
 
-              const localId = this.stackFrame[currentFunction].localVariablesList.find(({ param }) =>
+              const localId = this.stackFrame[this.currentFunction].localVariablesList.find(({ param }) =>
                 param.id === id
               )
               if (localId) {
@@ -449,7 +465,7 @@ export class AsmGenerator {
                 continue
               }
               // 函数形参
-              const actualId = this.stackFrame[currentFunction].actualParameterList.find(({ param }) =>
+              const actualId = this.stackFrame[this.currentFunction].actualParameterList.find(({ param }) =>
                 param.id === id
               )
               if (actualId) {
@@ -591,7 +607,7 @@ export class AsmGenerator {
         this.asm.push(`add $v0, ${sourceReg}, $zero`)
 
         // 恢复栈指针
-        this.asm.push(`addiu $sp, $sp, ${this.getTotalStackFrameSize(currentFunction)}`)
+        this.asm.push(`addiu $sp, $sp, ${this.getTotalStackFrameSize(this.currentFunction)}`)
 
         this.asm.push('jr $ra')
       }
@@ -614,7 +630,7 @@ export class AsmGenerator {
         )
 
         // 恢复栈指针
-        this.asm.push(`addiu $sp, $sp, ${this.getTotalStackFrameSize(currentFunction)}`)
+        this.asm.push(`addiu $sp, $sp, ${this.getTotalStackFrameSize(this.currentFunction)}`)
 
         this.asm.push('jr $ra')
       }
@@ -651,12 +667,49 @@ export class AsmGenerator {
           if (constantValues[arg1] === 0)
             this.asm.push(`j ${result}`)
         }
-        // 如果已经加载到寄存器
+        // 如果是加载到寄存器的数
         else if (regId) {
-          this.asm.push(`beq ${regId}, $zero, ${result}`)
+          this.asm.push(`bne ${regId}, $zero, ${result}`)
         }
-        // 先加载到内存再跳
         else {
+          let ad = ''
+          for (let v of this.addressDescriptors[arg1].values()) {
+            if (v.startsWith('__logical'))
+              ad = v
+            break
+          }
+          if (ad.startsWith('__logical')) {
+            const [_, op, left, right] = arg1.split(' ')
+            const leftReg = this.getARegister(left, true)
+            const rightReg = this.getARegister(right, true)
+            const arg1Reg = this.getARegister(arg1, true)
+            switch (op) {
+              case 'EQ':
+                this.asm.push(`beq ${leftReg}, ${rightReg}, ${result}`)
+                break
+              case 'NE':
+                this.asm.push(`bne ${leftReg}, ${rightReg}, ${result}`)
+                break
+              case 'LE':
+                this.asm.push(`sub ${arg1Reg}, ${rightReg}, ${leftReg}`)
+                this.asm.push(`bgez ${arg1Reg}, ${result}`)
+                break
+              case 'GE':
+                this.asm.push(`sub ${arg1Reg}, ${leftReg}, ${rightReg}`)
+                this.asm.push(`bgez ${arg1Reg}, ${result}`)
+                break
+              case '<':
+                this.asm.push(`sub ${arg1Reg}, ${rightReg}, ${leftReg}`)
+                this.asm.push(`bgtz ${arg1Reg}, ${result}`)
+                break
+              case '>':
+                this.asm.push(`sub ${arg1Reg}, ${leftReg}, ${rightReg}`)
+                this.asm.push(`bgtz ${arg1Reg}, ${result}`)
+                break
+            }
+            continue
+          }
+          // 先加载到内存再跳
           const targetReg = this.getARegister(arg1)
           for (let v of this.addressDescriptors[arg1].values()) {
             if (v.endsWith(`($sp)`))
@@ -673,45 +726,41 @@ export class AsmGenerator {
       }
       else {
         switch (op) {
-          case 'OR':
-            if (constantValues[arg1] && constantValues[arg2]) {
-              constantValues[result] = +(constantValues[arg1] || constantValues[arg2])
-            }
-            break
-          case 'AND':
-            if (constantValues[arg1] && constantValues[arg2]) {
-              constantValues[result] = +(constantValues[arg1] && constantValues[arg2])
-            }
-            break
           case 'EQ':
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] === constantValues[arg2])
             }
+            this.addressDescriptors[result] = new Set([`__logical ${op} ${arg1} ${arg2}`])
             break
           case 'NE':
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] !== constantValues[arg2])
             }
+            this.addressDescriptors[result] = new Set([`__logical ${op} ${arg1} ${arg2}`])
             break
           case 'LE':
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] <= constantValues[arg2])
             }
+            this.addressDescriptors[result] = new Set([`__logical ${op} ${arg1} ${arg2}`])
             break
           case 'GE':
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] >= constantValues[arg2])
             }
+            this.addressDescriptors[result] = new Set([`__logical ${op} ${arg1} ${arg2}`])
             break
           case '<':
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] < constantValues[arg2])
             }
+            this.addressDescriptors[result] = new Set([`__logical ${op} ${arg1} ${arg2}`])
             break
           case '>':
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] > constantValues[arg2])
             }
+            this.addressDescriptors[result] = new Set([`__logical ${op} ${arg1} ${arg2}`])
             break
           case '+':
             if (constantValues[arg1] && constantValues[arg2]) {
@@ -797,6 +846,7 @@ export class AsmGenerator {
               }
             }
             break
+          case 'OR':
           case '|':
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] | constantValues[arg2])
@@ -832,6 +882,7 @@ export class AsmGenerator {
               }
             }
             break
+          case 'AND':
           case '&':
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] & constantValues[arg2])
