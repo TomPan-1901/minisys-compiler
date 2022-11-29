@@ -1,4 +1,3 @@
-import { reduceEachLeadingCommentRange } from "typescript";
 import { IRArray } from "../IR/IRArray";
 import { IRGenerator } from "../IR/IRGenerator";
 import { IRVarialble } from "../IR/IRVariable";
@@ -305,6 +304,19 @@ export class AsmGenerator {
           this.asm.push(`${result}:`)
         }
       }
+      else if (op === 'assignMem') {
+        const sourceReg = this.getARegister(arg1, true)
+        if (constantValues[arg1]) {
+          if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
+            this.asm.push(`lui ${sourceReg}, ${(constantValues[arg1] >>> 16).toString(16)}`)
+            this.asm.push(`ori ${sourceReg} ${(constantValues[arg1] & 0xffff).toString(16)}`)
+          }
+          else {
+            this.asm.push(`addi ${sourceReg}, $zero, ${constantValues[arg1]}`)
+          }
+        }
+        this.asm.push(`sw ${sourceReg}, ${result}($zero)`)
+      }
       else if (op === 'assignConst') {
         constantValues[result] = parseInt(arg1)
       }
@@ -577,6 +589,11 @@ export class AsmGenerator {
           }
         }
         this.asm.push(`add $v0, ${sourceReg}, $zero`)
+
+        // 恢复栈指针
+        this.asm.push(`addiu $sp, $sp, ${this.getTotalStackFrameSize(currentFunction)}`)
+
+        this.asm.push('jr $ra')
       }
       else if (op === 'returnVoid') {
         // 写回所有的全局变量
