@@ -1,3 +1,4 @@
+import { reduceEachLeadingCommentRange } from "typescript";
 import { IRArray } from "../IR/IRArray";
 import { IRGenerator } from "../IR/IRGenerator";
 import { IRVarialble } from "../IR/IRVariable";
@@ -67,16 +68,19 @@ export class AsmGenerator {
     )
   }
 
-  getARegister(variableId: string) {
-    const addressSet = this.addressDescriptors[variableId]
+  getARegister(variableId: string, load = false): AsmGenerator["registers"][number] {
+    let addressSet = this.addressDescriptors[variableId]
     if (!addressSet) {
-      throw new Error()
+      this.addressDescriptors[variableId] = new Set()
+      addressSet = this.addressDescriptors[variableId]
     }
     let memoryAddress = ''
     // 如果变量已经在寄存器中，选择这个寄存器
     for (let [address, _] of addressSet.entries()) {
       if (address.startsWith('$')) {
-        return address
+        this.registerDescriptors[address as AsmGenerator["registers"][number]].add(address)
+        this.addressDescriptors[variableId].add(address)
+        return address as AsmGenerator["registers"][number]
       }
       else {
         memoryAddress = address
@@ -89,6 +93,15 @@ export class AsmGenerator {
     if (availableRegister) {
       addressSet.add(availableRegister)
       this.registerDescriptors[availableRegister].add(variableId)
+      if (load && memoryAddress.length) {
+        if (memoryAddress.endsWith(`($sp)`))
+          this.asm.push(`lw ${availableRegister}, ${memoryAddress}`)
+        else {
+          this.asm.push(`lw ${availableRegister}, ${memoryAddress}($zero)`)
+        }
+      }
+      this.registerDescriptors[availableRegister as AsmGenerator["registers"][number]].add(variableId)
+      this.addressDescriptors[variableId].add(availableRegister)
       return availableRegister
     }
 
@@ -118,7 +131,16 @@ export class AsmGenerator {
         }
       }
     )
-    return result
+    if (load && memoryAddress.length) {
+      if (memoryAddress.endsWith(`($sp)`))
+        this.asm.push(`lw ${availableRegister}, ${memoryAddress}`)
+      else {
+        this.asm.push(`lw ${availableRegister}, ${memoryAddress}($zero)`)
+      }
+    }
+    this.registerDescriptors[result as AsmGenerator["registers"][number]].add(variableId)
+    this.addressDescriptors[variableId].add(result)
+    return result as AsmGenerator["registers"][number]
   }
 
   generateStackFrameInfo() {
@@ -308,23 +330,19 @@ export class AsmGenerator {
               this.asm.push(`addi ${regId}, $zero, ${constantValues[arg1]}`)
             }
             this.addressDescriptors[result] = new Set([regId])
+            this.registerDescriptors[regId as AsmGenerator["registers"][number]].add(result)
           }
           else {
             const targetReg = this.getARegister(result)
-            if (memAddr.endsWith('($sp)'))
-              this.asm.push(`lw ${targetReg}, ${memAddr}`)
-            else
-              this.asm.push(`lw ${targetReg}, ${memAddr}($zero)`)
-
             if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
-              this.asm.push(`lui ${memAddr}, ${(constantValues[arg1] >>> 16).toString(16)}`)
-              this.asm.push(`ori ${memAddr}, ${(constantValues[arg1] & 0xffff).toString(16)}`)
+              this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(16)}`)
+              this.asm.push(`ori ${targetReg}, ${(constantValues[arg1] & 0xffff).toString(16)}`)
             }
             else {
-              this.asm.push(`addi ${memAddr}, $zero, ${constantValues[arg1]}`)
+              this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg1]}`)
             }
             this.addressDescriptors[result] = new Set([targetReg])
-
+            this.registerDescriptors[targetReg].add(result)
           }
         }
         else {
@@ -345,7 +363,7 @@ export class AsmGenerator {
             if (!this.addressDescriptors[result]) {
               this.addressDescriptors[result] = new Set()
             }
-            this.addressDescriptors[result].add(regId)
+            this.addressDescriptors[result] = new Set([regId])
           }
           else if (memAddr.length) {
             const targetReg = this.getARegister(result)
@@ -362,10 +380,32 @@ export class AsmGenerator {
         }
       }
       else if (op === 'readArray') {
-
+        const targetReg = this.getARegister(result)
+        const offsetReg = this.getARegister(arg2)
+        if (constantValues[arg2]) {
+          if (constantValues[arg2] > 32767 || constantValues[arg2] < -32768) {
+            this.asm.push(`lui ${targetReg}, ${(constantValues[arg2] >>> 16).toString(16)}`)
+            this.asm.push(`ori ${targetReg} ${(constantValues[arg2] & 0xffff).toString(16)}`)
+          }
+          else {
+            this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg2]}`)
+          }
+        }
+        this.asm.push(`lw ${targetReg}, ${arg1}(${offsetReg})`)
       }
       else if (op === 'assignArray') {
-
+        const sourceReg = this.getARegister(arg1)
+        const offsetReg = this.getARegister(arg2)
+        if (constantValues[arg1]) {
+          if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
+            this.asm.push(`lui ${sourceReg}, ${(constantValues[arg1] >>> 16).toString(16)}`)
+            this.asm.push(`ori ${sourceReg} ${(constantValues[arg1] & 0xffff).toString(16)}`)
+          }
+          else {
+            this.asm.push(`addi ${sourceReg}, $zero, ${constantValues[arg1]}`)
+          }
+        }
+        this.asm.push(`sw ${sourceReg}, ${result}(${offsetReg})`)
       }
       else if (op === 'call') {
         const functionName = arg1
@@ -526,7 +566,17 @@ export class AsmGenerator {
         this.asm.push(`jal __Minic_Entry_${functionName}`)
       }
       else if (op === 'returnExpr') {
-
+        const sourceReg = this.getARegister(arg1, true)
+        if (constantValues[arg1]) {
+          if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
+            this.asm.push(`lui ${sourceReg}, ${(constantValues[arg1] >>> 16).toString(16)}`)
+            this.asm.push(`ori ${sourceReg} ${(constantValues[arg1] & 0xffff).toString(16)}`)
+          }
+          else {
+            this.asm.push(`addi ${sourceReg}, $zero, ${constantValues[arg1]}`)
+          }
+        }
+        this.asm.push(`add $v0, ${sourceReg}, $zero`)
       }
       else if (op === 'returnVoid') {
         // 写回所有的全局变量
@@ -537,7 +587,7 @@ export class AsmGenerator {
               if (this.addressDescriptors[key].size === 1) {
                 for (let a of this.addressDescriptors[key].values()) {
                   if (a.startsWith('$')) {
-                    this.asm.push(`sw ${a}, ${this.globalVariablePool[key]}`)
+                    this.asm.push(`sw ${a}, ${this.globalVariablePool[key]}($zero)`)
                   }
                 }
                 this.addressDescriptors[key] = new Set([this.globalVariablePool[key]])
@@ -545,20 +595,61 @@ export class AsmGenerator {
             }
           }
         )
+
+        // 恢复栈指针
+        this.asm.push(`addiu $sp, $sp, ${this.getTotalStackFrameSize(currentFunction)}`)
+
         this.asm.push('jr $ra')
       }
       else if (op === 'jFalse') {
         // 看标号位置
-
+        const regId = Object.entries(this.registerDescriptors).find(v => v[1].has(arg1))
         // 如果是常数，直接跳
         if (constantValues[arg1]) {
-          continue
+          if (constantValues[arg1] !== 0)
+            this.asm.push(`j ${result}`)
         }
         // 如果已经加载到寄存器
-        else if ()
+        else if (regId) {
+          this.asm.push(`bne ${regId}, $zero, ${result}`)
+        }
+        // 先加载到内存再跳
+        else {
+          const targetReg = this.getARegister(arg1)
+          for (let v of this.addressDescriptors[arg1].values()) {
+            if (v.endsWith(`($sp)`))
+              this.asm.push(`lw ${targetReg}, ${v}`)
+            else {
+              this.asm.push(`lw ${targetReg}, ${v}($zero)`)
+            }
+          }
+          this.asm.push(`bne ${targetReg}, $zero, ${result}`)
+        }
       }
       else if (op === 'jTrue') {
-        this.asm.push(`bne `)
+        // 看标号位置
+        const regId = Object.entries(this.registerDescriptors).find(v => v[1].has(arg1))
+        // 如果是常数，直接跳
+        if (constantValues[arg1]) {
+          if (constantValues[arg1] === 0)
+            this.asm.push(`j ${result}`)
+        }
+        // 如果已经加载到寄存器
+        else if (regId) {
+          this.asm.push(`beq ${regId}, $zero, ${result}`)
+        }
+        // 先加载到内存再跳
+        else {
+          const targetReg = this.getARegister(arg1)
+          for (let v of this.addressDescriptors[arg1].values()) {
+            if (v.endsWith(`($sp)`))
+              this.asm.push(`lw ${targetReg}, ${v}`)
+            else {
+              this.asm.push(`lw ${targetReg}, ${v}($zero)`)
+            }
+          }
+          this.asm.push(`beq ${targetReg}, $zero, ${result}`)
+        }
       }
       else if (op === 'j') {
         this.asm.push(`j ${result}`)
@@ -612,6 +703,40 @@ export class AsmGenerator {
             else if (constantValues[arg1] && arg2 === '') {
               constantValues[result] = constantValues[arg1]
             }
+            else if (arg2 === '') {
+              const arg1Reg = this.getARegister(arg1, true)
+              this.registerDescriptors[arg1Reg].add(result)
+            }
+            else {
+              if (constantValues[arg1] && !constantValues[arg2]) {
+                const targetReg = this.getARegister(result)
+                const rightReg = this.getARegister(arg2, true)
+                if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
+                  this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(16)}`)
+                  this.asm.push(`ori ${targetReg} ${(constantValues[arg1] & 0xffff).toString(16)}`)
+                }
+                else {
+                  this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg1]}`)
+                }
+                this.asm.push(`add ${targetReg}, ${targetReg}, ${rightReg}`)
+                this.addressDescriptors[result] = new Set([targetReg])
+              }
+              else if (!constantValues[arg1] && constantValues[arg2]) {
+                // TODO: arg2大于16位
+                const leftReg = this.getARegister(arg1, true)
+                const targetReg = this.getARegister(result)
+                this.asm.push(`addi ${targetReg}, ${leftReg}, ${constantValues[arg2]}`)
+                this.addressDescriptors[result] = new Set([targetReg])
+                this.registerDescriptors[targetReg].add(result)
+              }
+              else {
+                const rs = this.getARegister(arg1, true)
+                const rt = this.getARegister(arg2, true)
+                const rd = this.getARegister(result, true)
+                this.asm.push(`add ${rd}, ${rs}, ${rt}`)
+                this.addressDescriptors[result] = new Set([rd])
+              }
+            }
             break
           case '-':
             if (constantValues[arg1] && constantValues[arg2]) {
@@ -620,20 +745,144 @@ export class AsmGenerator {
             else if (constantValues[arg1] && arg2 === '') {
               constantValues[result] = -constantValues[arg1]
             }
+            else if (arg2 === '') {
+              const arg1Reg = this.getARegister(arg1, true)
+              this.registerDescriptors[arg1Reg].add(result)
+            }
+            else {
+              if (constantValues[arg1] && !constantValues[arg2]) {
+                const targetReg = this.getARegister(result)
+                const rightReg = this.getARegister(arg2, true)
+                if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
+                  this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(16)}`)
+                  this.asm.push(`ori ${targetReg} ${(constantValues[arg1] & 0xffff).toString(16)}`)
+                }
+                else {
+                  this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg1]}`)
+                }
+                this.asm.push(`sub ${targetReg}, ${targetReg}, ${rightReg}`)
+                this.addressDescriptors[result] = new Set([targetReg])
+              }
+              else if (!constantValues[arg1] && constantValues[arg2]) {
+                // TODO: arg2大于16位
+                const leftReg = this.getARegister(arg1, true)
+                const targetReg = this.getARegister(result)
+                this.asm.push(`subi ${targetReg}, ${leftReg}, ${constantValues[arg2]}`)
+                this.addressDescriptors[result] = new Set([targetReg])
+                this.registerDescriptors[targetReg].add(result)
+              }
+              else {
+                const rs = this.getARegister(arg1, true)
+                const rt = this.getARegister(arg2, true)
+                const rd = this.getARegister(result, true)
+                this.asm.push(`sub ${rd}, ${rs}, ${rt}`)
+                this.addressDescriptors[result] = new Set([rd])
+              }
+            }
             break
           case '|':
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] | constantValues[arg2])
+            }
+            else {
+              if (constantValues[arg1] && !constantValues[arg2]) {
+                const targetReg = this.getARegister(result)
+                const rightReg = this.getARegister(arg2, true)
+                if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
+                  this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(16)}`)
+                  this.asm.push(`ori ${targetReg} ${(constantValues[arg1] & 0xffff).toString(16)}`)
+                }
+                else {
+                  this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg1]}`)
+                }
+                this.asm.push(`or ${targetReg}, ${targetReg}, ${rightReg}`)
+                this.addressDescriptors[result] = new Set([targetReg])
+              }
+              else if (!constantValues[arg1] && constantValues[arg2]) {
+                // TODO: arg2大于16位
+                const leftReg = this.getARegister(arg1, true)
+                const targetReg = this.getARegister(result)
+                this.asm.push(`ori ${targetReg}, ${leftReg}, ${constantValues[arg2]}`)
+                this.addressDescriptors[result] = new Set([targetReg])
+                this.registerDescriptors[targetReg].add(result)
+              }
+              else {
+                const rs = this.getARegister(arg1, true)
+                const rt = this.getARegister(arg2, true)
+                const rd = this.getARegister(result, true)
+                this.asm.push(`or ${rd}, ${rs}, ${rt}`)
+                this.addressDescriptors[result] = new Set([rd])
+              }
             }
             break
           case '&':
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] & constantValues[arg2])
             }
+            else {
+              if (constantValues[arg1] && !constantValues[arg2]) {
+                const targetReg = this.getARegister(result)
+                const rightReg = this.getARegister(arg2, true)
+                if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
+                  this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(16)}`)
+                  this.asm.push(`ori ${targetReg} ${(constantValues[arg1] & 0xffff).toString(16)}`)
+                }
+                else {
+                  this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg1]}`)
+                }
+                this.asm.push(`and ${targetReg}, ${targetReg}, ${rightReg}`)
+                this.addressDescriptors[result] = new Set([targetReg])
+              }
+              else if (!constantValues[arg1] && constantValues[arg2]) {
+                // TODO: arg2大于16位
+                const leftReg = this.getARegister(arg1, true)
+                const targetReg = this.getARegister(result)
+                this.asm.push(`andi ${targetReg}, ${leftReg}, ${constantValues[arg2]}`)
+                this.addressDescriptors[result] = new Set([targetReg])
+                this.registerDescriptors[targetReg].add(result)
+              }
+              else {
+                const rs = this.getARegister(arg1, true)
+                const rt = this.getARegister(arg2, true)
+                const rd = this.getARegister(result, true)
+                this.asm.push(`and ${rd}, ${rs}, ${rt}`)
+                this.addressDescriptors[result] = new Set([rd])
+              }
+            }
             break
           case '^':
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] ^ constantValues[arg2])
+            }
+            else {
+              if (constantValues[arg1] && !constantValues[arg2]) {
+                const targetReg = this.getARegister(result)
+                const rightReg = this.getARegister(arg2, true)
+                if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
+                  this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(16)}`)
+                  this.asm.push(`ori ${targetReg} ${(constantValues[arg1] & 0xffff).toString(16)}`)
+                }
+                else {
+                  this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg1]}`)
+                }
+                this.asm.push(`xor ${targetReg}, ${targetReg}, ${rightReg}`)
+                this.addressDescriptors[result] = new Set([targetReg])
+              }
+              else if (!constantValues[arg1] && constantValues[arg2]) {
+                // TODO: arg2大于16位
+                const leftReg = this.getARegister(arg1, true)
+                const targetReg = this.getARegister(result)
+                this.asm.push(`xori ${targetReg}, ${leftReg}, ${constantValues[arg2]}`)
+                this.addressDescriptors[result] = new Set([targetReg])
+                this.registerDescriptors[targetReg].add(result)
+              }
+              else {
+                const rs = this.getARegister(arg1, true)
+                const rt = this.getARegister(arg2, true)
+                const rd = this.getARegister(result, true)
+                this.asm.push(`xori ${rd}, ${rs}, ${rt}`)
+                this.addressDescriptors[result] = new Set([rd])
+              }
             }
             break
           case '*':
@@ -647,6 +896,7 @@ export class AsmGenerator {
             }
             break
           case '%':
+            // TODO
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] % constantValues[arg2])
             }
