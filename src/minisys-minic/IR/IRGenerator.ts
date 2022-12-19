@@ -305,6 +305,7 @@ export class IRGenerator {
         const arrayVar = this.getVariableByName(node.child[0].attributes)
         const rightResult = this.parseExpr(node.child[5])
         this.quadruples.push(new Quadruple('assignArray', index, rightResult, arrayVar.id))
+        break
       case 'expr':
         const address = this.parseExpr(node.child[1])
         const result = this.parseExpr(node.child[3])
@@ -321,15 +322,15 @@ export class IRGenerator {
 
   parseWhileStmt(node: ASTNode) {
 
-    const loopLabel = `${this.jumpLabelCount}_loop`
-    const breakLabel = `${this.jumpLabelCount}_break`
+    const loopLabel = `loop_${this.jumpLabelCount}`
+    const breakLabel = `break_${this.jumpLabelCount}`
     this.jumpLabelCount++
     this.jumpContextStack.push({ trueLabel: loopLabel, falseLabel: breakLabel, used: false })
     const expr = this.parseExpr(node.child[2], true)
     this.loopContext.push({ loopLabel, breakLabel })
+    this.quadruples.push(new Quadruple('setLabel', '', '', loopLabel))
     if (expr !== '')
       this.quadruples.push(new Quadruple('jFalse', expr, '', breakLabel))
-    this.quadruples.push(new Quadruple('setLabel', '', '', loopLabel))
     this.parseStmt(node.child[4])
     this.quadruples.push(new Quadruple('j', '', '', loopLabel))
     this.quadruples.push(new Quadruple('setLabel', '', '', breakLabel))
@@ -429,7 +430,7 @@ export class IRGenerator {
           const arrayBase = this.getVariableByName(node.child[0].attributes) as IRArray
           const index = this.parseExpr(node.child[2])
           const result = this.newVariableId()
-          this.quadruples.push(new Quadruple('readArray', arrayBase.getId(), index, result))
+          this.quadruples.push(new Quadruple('readArray', arrayBase.id, index, result))
           return result
         }
         else if (node.child[1].label === '(') {
