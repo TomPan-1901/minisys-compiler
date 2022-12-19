@@ -38,8 +38,10 @@ export class IRGenerator {
     breakLabel: string
   }[] = []
   private basicBlock: BasicBlock[]
+  private hashPrefix: string
 
-  constructor() {
+  constructor(hashPrefix: string) {
+    this.hashPrefix = hashPrefix
     this.functions = []
     this.variables = []
     this.quadruples = []
@@ -50,6 +52,20 @@ export class IRGenerator {
     this.variableCount = 0
     this.jumpContextStack = []
     this.jumpLabelCount = 0
+  }
+
+  public static getMergedContext(...generators: IRGenerator[]): IRGenerator {
+    let result = new IRGenerator('')
+    let functionRecords: Record<string, IRFunction> = {}
+    generators.map(v => v.functions).flat().forEach(
+      f => {
+        functionRecords[f.name] = f
+      }
+    )
+    result.functions = Object.keys(functionRecords).map(v => functionRecords[v])
+    result.variables = generators.map(v => v.variables).flat()
+    result.quadruples = generators.map(v => v.quadruples).flat()
+    return result
   }
 
   public getFunctions(): IRFunction[] {
@@ -137,7 +153,7 @@ export class IRGenerator {
   }
 
   newVariableId(): string {
-    return `__MiniC_Variable_${this.variableCount++}`
+    return `__MiniC_Variable_${this.hashPrefix}_${this.variableCount++}`
   }
 
   public start(node: ASTNode) {
@@ -210,13 +226,25 @@ export class IRGenerator {
       functionName: id
     }
 
-    const functionContext = new IRFunction(id, returnType, entryLabel, exitLabel)
-    this.functions.push(functionContext)
-    this.scopeStack.push(this.scopeCount++)
+    const functionContext = new IRFunction(id, returnType, entryLabel, exitLabel, node.child[5].label === ';')
+    const existedContext = this.functions.find(v => v.name === functionContext.name)
+    if (existedContext !== undefined) {
+      existedContext.symbol = (node.child[5].label === ';')
+    }
+    else {
+      this.functions.push(functionContext)
+    }
     this.parseParams(node.child[3], id)
     if (node.child[5].label === ';') {
       return
     }
+    if (existedContext !== undefined) {
+      existedContext.symbol = false
+    }
+    else {
+      functionContext.symbol = false
+    }
+    this.scopeStack.push(this.scopeCount++)
     this.quadruples.push(new Quadruple('setLabel', '', '', entryLabel))
     this.parseCompoundStmt(node.child[5], functionContext)
     this.quadruples.push(new Quadruple('setLabel', '', '', exitLabel))
@@ -305,6 +333,7 @@ export class IRGenerator {
         const arrayVar = this.getVariableByName(node.child[0].attributes)
         const rightResult = this.parseExpr(node.child[5])
         this.quadruples.push(new Quadruple('assignArray', index, rightResult, arrayVar.id))
+        break
       case 'expr':
         const address = this.parseExpr(node.child[1])
         const result = this.parseExpr(node.child[3])
@@ -321,15 +350,15 @@ export class IRGenerator {
 
   parseWhileStmt(node: ASTNode) {
 
-    const loopLabel = `${this.jumpLabelCount}_loop`
-    const breakLabel = `${this.jumpLabelCount}_break`
+    const loopLabel = `loop_${this.hashPrefix}_${this.jumpLabelCount}`
+    const breakLabel = `break_${this.hashPrefix}_${this.jumpLabelCount}`
     this.jumpLabelCount++
     this.jumpContextStack.push({ trueLabel: loopLabel, falseLabel: breakLabel, used: false })
     const expr = this.parseExpr(node.child[2], true)
     this.loopContext.push({ loopLabel, breakLabel })
+    this.quadruples.push(new Quadruple('setLabel', '', '', loopLabel))
     if (expr !== '')
       this.quadruples.push(new Quadruple('jFalse', expr, '', breakLabel))
-    this.quadruples.push(new Quadruple('setLabel', '', '', loopLabel))
     this.parseStmt(node.child[4])
     this.quadruples.push(new Quadruple('j', '', '', loopLabel))
     this.quadruples.push(new Quadruple('setLabel', '', '', breakLabel))
@@ -372,8 +401,8 @@ export class IRGenerator {
   }
 
   parseIfStmt(node: ASTNode) {
-    const trueLabel = `${this.jumpLabelCount}_true`
-    const falseLabel = `${this.jumpLabelCount}_false`
+    const trueLabel = `${this.hashPrefix}_true_${this.jumpLabelCount}`
+    const falseLabel = `${this.hashPrefix}_false_${this.jumpLabelCount}`
     this.jumpLabelCount++
     this.jumpContextStack.push({ trueLabel, falseLabel, used: false })
     const expr = this.parseExpr(node.child[2], true)
@@ -429,7 +458,7 @@ export class IRGenerator {
           const arrayBase = this.getVariableByName(node.child[0].attributes) as IRArray
           const index = this.parseExpr(node.child[2])
           const result = this.newVariableId()
-          this.quadruples.push(new Quadruple('readArray', arrayBase.getId(), index, result))
+          this.quadruples.push(new Quadruple('readArray', arrayBase.id, index, result))
           return result
         }
         else if (node.child[1].label === '(') {
@@ -445,7 +474,7 @@ export class IRGenerator {
     if (inJumpContext) {
       const { trueLabel, falseLabel } = this.jumpContextStack[this.jumpContextStack.length - 1]
       if (node.child.length === 3 && node.child[1].label === 'OR') {
-        const blockJumpLabel = `${this.jumpLabelCount}_false`
+        const blockJumpLabel = `${this.hashPrefix}_false_${this.jumpLabelCount}`
         this.jumpLabelCount++
         this.jumpContextStack.push({ trueLabel: trueLabel, falseLabel: blockJumpLabel, used: false })
         const left = this.parseExpr(node.child[0], true) as string
@@ -466,7 +495,7 @@ export class IRGenerator {
         return ''
       }
       else if (node.child.length === 3 && node.child[1].label === 'AND') {
-        const blockJumpLabel = `${this.jumpLabelCount}_false`
+        const blockJumpLabel = `${this.hashPrefix}_false_${this.jumpLabelCount}`
         this.jumpLabelCount++
         this.jumpContextStack.push({ trueLabel: blockJumpLabel, falseLabel: falseLabel, used: false })
         const left = this.parseExpr(node.child[0], true) as string

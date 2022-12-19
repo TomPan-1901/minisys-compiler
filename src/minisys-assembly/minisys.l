@@ -36,7 +36,7 @@ T_ASCIIZ .asciiz
 T_ALIGN .align
 T_SPACE .space
 T_NUM (0x[0-9a-fA-F]+)|([0-9]+)|(0b[01]+)
-T_IDNAME [a-zA-Z][0-9a-zA-Z]*
+T_IDNAME (_|[a-zA-Z])(_|[0-9a-zA-Z])*
 T_ASCIINUM [^ \n\r\t]
 
 %%
