@@ -217,20 +217,20 @@ N_COM
     })
   }
  | T_BZICOM T_REG T_COMMA N_IMMEDIATE {
-    let rt = 0b00000
+    let rt = '$0'
     if ($attr[0] === 'bgez') {
       rt = '$1'
     }
     else if ($attr[0] === 'bgezal') {
       rt = '$17'
     }
-    else if ($attr[0] = 'bltzal') {
+    else if ($attr[0] === 'bltzal') {
       rt = '$16'
     }
     $$attr = new InstructionI({
       op: $attr[0],
       rs: $attr[1],
-      rt: rt
+      rt: rt,
       immediate: typeof $attr[3] === 'number' ? ($attr[3] >>> 0 & 0xffff) : $attr[3]
     })
   }

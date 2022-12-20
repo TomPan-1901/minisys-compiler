@@ -53,7 +53,7 @@ export class AsmGenerator {
     this.asm.push('.data')
     this.generateGlobalVariables()
     this.asm.push('.text')
-    this.asm.push('start: j main')
+    this.asm.push('start: j __MiniC_Entry_main')
     this.generateTextSegments()
   }
 
@@ -340,13 +340,14 @@ export class AsmGenerator {
             this.asm.push(`addi ${sourceReg}, $zero, ${constantValues[arg1]}`)
           }
         }
-        if (constantValues[result]) {
+        if (constantValues[result] !== undefined) {
           const targetReg = this.getARegister(result)
           this.asm.push(`lui ${targetReg}, ${(constantValues[result] >>> 16).toString(10)}`)
           this.asm.push(`sw ${sourceReg}, ${constantValues[result] & 0xffff}(${targetReg})`)
         }
         else {
-          this.asm.push(`sw ${sourceReg}, ${result}($zero)`)
+          const targetReg = this.getARegister(result)
+          this.asm.push(`sw ${sourceReg}, 0(${targetReg})`)
         }
       }
       else if (op === 'assignConst') {
@@ -403,11 +404,34 @@ export class AsmGenerator {
             }
           }
           if (regId.length) {
-            this.registerDescriptors[regId as AsmGenerator["registers"][number]].add(result)
-            if (!this.addressDescriptors[result]) {
-              this.addressDescriptors[result] = new Set()
+            if (this.addressDescriptors[result] !== undefined) {
+
+              let resultRegId = ''
+              let resultMemAddr = ''
+              for (let v of this.addressDescriptors[result].values()) {
+                // 如果变量已经加载入寄存器，直接写入
+                if (v.startsWith('$')) {
+                  resultRegId = v
+                }
+                else {
+                  resultMemAddr = v
+                }
+              }
+              if (resultRegId.length) {
+                this.asm.push(`add ${resultRegId}, $zero, ${regId}`)
+                this.addressDescriptors[result] = new Set([resultRegId])
+              }
+              else {
+                this.addressDescriptors[result] = new Set([regId])
+              }
             }
-            this.addressDescriptors[result] = new Set([regId])
+            else {
+              this.registerDescriptors[regId as AsmGenerator["registers"][number]].add(result)
+              if (!this.addressDescriptors[result]) {
+                this.addressDescriptors[result] = new Set()
+              }
+              this.addressDescriptors[result] = new Set([regId])
+            }
           }
           else if (memAddr.length) {
             const targetReg = this.getARegister(result)
@@ -1040,6 +1064,19 @@ export class AsmGenerator {
           case '~':
             if (constantValues[arg1]) {
               constantValues[result] = +(~constantValues[arg1])
+            }
+            break
+          case '$':
+            if (constantValues[arg1]) {
+              const targetReg = this.getARegister(arg1, false)
+              const resultReg = this.getARegister(result, false)
+              this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
+              this.asm.push(`lw ${resultReg}, ${constantValues[arg1] & 0xffff}(${targetReg})`)
+            }
+            else {
+              const targetReg = this.getARegister(arg1, true)
+              const resultReg = this.getARegister(result, false)
+              this.asm.push(`lw ${resultReg}, 0(${targetReg})`)
             }
             break
         }
