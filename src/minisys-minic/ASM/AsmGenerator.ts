@@ -701,26 +701,26 @@ export class AsmGenerator {
             const arg1Reg = this.getARegister(arg1)
             switch (op) {
               case 'EQ':
-                this.asm.push(`beq ${leftReg}, ${rightReg}, ${result}`)
-                break
-              case 'NE':
                 this.asm.push(`bne ${leftReg}, ${rightReg}, ${result}`)
                 break
+              case 'NE':
+                this.asm.push(`beq ${leftReg}, ${rightReg}, ${result}`)
+                break
               case 'LE':
-                this.asm.push(`sub ${arg1Reg}, ${rightReg}, ${leftReg}`)
-                this.asm.push(`bgez ${arg1Reg}, ${result}`)
+                this.asm.push(`sub ${arg1Reg}, ${leftReg}, ${rightReg}`)
+                this.asm.push(`bgtz ${arg1Reg}, ${result}`)
                 break
               case 'GE':
-                this.asm.push(`sub ${arg1Reg}, ${leftReg}, ${rightReg}`)
-                this.asm.push(`bgez ${arg1Reg}, ${result}`)
-                break
-              case '<':
                 this.asm.push(`sub ${arg1Reg}, ${rightReg}, ${leftReg}`)
                 this.asm.push(`bgtz ${arg1Reg}, ${result}`)
                 break
-              case '>':
+              case '<':
                 this.asm.push(`sub ${arg1Reg}, ${leftReg}, ${rightReg}`)
-                this.asm.push(`bgtz ${arg1Reg}, ${result}`)
+                this.asm.push(`bgez ${arg1Reg}, ${result}`)
+                break
+              case '>':
+                this.asm.push(`sub ${arg1Reg}, ${rightReg}, ${leftReg}`)
+                this.asm.push(`bgez ${arg1Reg}, ${result}`)
                 break
             }
             continue
