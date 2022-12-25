@@ -38,8 +38,10 @@ export class IRGenerator {
     breakLabel: string
   }[] = []
   private basicBlock: BasicBlock[]
+  private hashPrefix: string
 
-  constructor() {
+  constructor(hashPrefix: string) {
+    this.hashPrefix = hashPrefix
     this.functions = []
     this.variables = []
     this.quadruples = []
@@ -50,6 +52,20 @@ export class IRGenerator {
     this.variableCount = 0
     this.jumpContextStack = []
     this.jumpLabelCount = 0
+  }
+
+  public static getMergedContext(...generators: IRGenerator[]): IRGenerator {
+    let result = new IRGenerator('')
+    let functionRecords: Record<string, IRFunction> = {}
+    generators.map(v => v.functions).flat().forEach(
+      f => {
+        functionRecords[f.name] = f
+      }
+    )
+    result.functions = Object.keys(functionRecords).map(v => functionRecords[v])
+    result.variables = generators.map(v => v.variables).flat()
+    result.quadruples = generators.map(v => v.quadruples).flat()
+    return result
   }
 
   public getFunctions(): IRFunction[] {
@@ -137,7 +153,7 @@ export class IRGenerator {
   }
 
   newVariableId(): string {
-    return `__MiniC_Variable_${this.variableCount++}`
+    return `__MiniC_Variable_${this.hashPrefix}_${this.variableCount++}`
   }
 
   public start(node: ASTNode) {
@@ -210,13 +226,25 @@ export class IRGenerator {
       functionName: id
     }
 
-    const functionContext = new IRFunction(id, returnType, entryLabel, exitLabel)
-    this.functions.push(functionContext)
-    this.scopeStack.push(this.scopeCount++)
+    const functionContext = new IRFunction(id, returnType, entryLabel, exitLabel, node.child[5].label === ';')
+    const existedContext = this.functions.find(v => v.name === functionContext.name)
+    if (existedContext !== undefined) {
+      existedContext.symbol = (node.child[5].label === ';')
+    }
+    else {
+      this.functions.push(functionContext)
+    }
     this.parseParams(node.child[3], id)
     if (node.child[5].label === ';') {
       return
     }
+    if (existedContext !== undefined) {
+      existedContext.symbol = false
+    }
+    else {
+      functionContext.symbol = false
+    }
+    this.scopeStack.push(this.scopeCount++)
     this.quadruples.push(new Quadruple('setLabel', '', '', entryLabel))
     this.parseCompoundStmt(node.child[5], functionContext)
     this.quadruples.push(new Quadruple('setLabel', '', '', exitLabel))
@@ -322,8 +350,8 @@ export class IRGenerator {
 
   parseWhileStmt(node: ASTNode) {
 
-    const loopLabel = `loop_${this.jumpLabelCount}`
-    const breakLabel = `break_${this.jumpLabelCount}`
+    const loopLabel = `loop_${this.hashPrefix}_${this.jumpLabelCount}`
+    const breakLabel = `break_${this.hashPrefix}_${this.jumpLabelCount}`
     this.jumpLabelCount++
     this.jumpContextStack.push({ trueLabel: loopLabel, falseLabel: breakLabel, used: false })
     const expr = this.parseExpr(node.child[2], true)
@@ -373,8 +401,8 @@ export class IRGenerator {
   }
 
   parseIfStmt(node: ASTNode) {
-    const trueLabel = `${this.jumpLabelCount}_true`
-    const falseLabel = `${this.jumpLabelCount}_false`
+    const trueLabel = `${this.hashPrefix}_true_${this.jumpLabelCount}`
+    const falseLabel = `${this.hashPrefix}_false_${this.jumpLabelCount}`
     this.jumpLabelCount++
     this.jumpContextStack.push({ trueLabel, falseLabel, used: false })
     const expr = this.parseExpr(node.child[2], true)
@@ -446,7 +474,7 @@ export class IRGenerator {
     if (inJumpContext) {
       const { trueLabel, falseLabel } = this.jumpContextStack[this.jumpContextStack.length - 1]
       if (node.child.length === 3 && node.child[1].label === 'OR') {
-        const blockJumpLabel = `${this.jumpLabelCount}_false`
+        const blockJumpLabel = `${this.hashPrefix}_false_${this.jumpLabelCount}`
         this.jumpLabelCount++
         this.jumpContextStack.push({ trueLabel: trueLabel, falseLabel: blockJumpLabel, used: false })
         const left = this.parseExpr(node.child[0], true) as string
@@ -467,7 +495,7 @@ export class IRGenerator {
         return ''
       }
       else if (node.child.length === 3 && node.child[1].label === 'AND') {
-        const blockJumpLabel = `${this.jumpLabelCount}_false`
+        const blockJumpLabel = `${this.hashPrefix}_false_${this.jumpLabelCount}`
         this.jumpLabelCount++
         this.jumpContextStack.push({ trueLabel: blockJumpLabel, falseLabel: falseLabel, used: false })
         const left = this.parseExpr(node.child[0], true) as string

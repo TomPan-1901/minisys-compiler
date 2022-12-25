@@ -334,7 +334,7 @@ export class AsmGenerator {
         if (constantValues[arg1]) {
           if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
             this.asm.push(`lui ${sourceReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
-            this.asm.push(`ori ${sourceReg} ${(constantValues[arg1] & 0xffff).toString(10)}`)
+            this.asm.push(`ori ${sourceReg}, ${sourceReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
           }
           else {
             this.asm.push(`addi ${sourceReg}, $zero, ${constantValues[arg1]}`)
@@ -343,7 +343,8 @@ export class AsmGenerator {
         if (constantValues[result] !== undefined) {
           const targetReg = this.getARegister(result)
           this.asm.push(`lui ${targetReg}, ${(constantValues[result] >>> 16).toString(10)}`)
-          this.asm.push(`sw ${sourceReg}, ${constantValues[result] & 0xffff}(${targetReg})`)
+          this.asm.push(`ori ${targetReg}, ${targetReg}, ${(constantValues[result] & 0xffff).toString(10)}`)
+          this.asm.push(`sw ${sourceReg}, 0(${targetReg})`)
         }
         else {
           const targetReg = this.getARegister(result)
@@ -369,7 +370,7 @@ export class AsmGenerator {
           if (regId.length) {
             if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
               this.asm.push(`lui ${regId}, ${(constantValues[arg1] >>> 16).toString(10)}`)
-              this.asm.push(`ori ${regId}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
+              this.asm.push(`ori ${regId}, ${regId}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
             }
             else {
               this.asm.push(`addi ${regId}, $zero, ${constantValues[arg1]}`)
@@ -381,7 +382,7 @@ export class AsmGenerator {
             const targetReg = this.getARegister(result)
             if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
               this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
-              this.asm.push(`ori ${targetReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
+              this.asm.push(`ori ${targetReg}, ${targetReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
             }
             else {
               this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg1]}`)
@@ -453,7 +454,7 @@ export class AsmGenerator {
         if (constantValues[arg2]) {
           if (constantValues[arg2] > 32767 || constantValues[arg2] < -32768) {
             this.asm.push(`lui ${offsetReg}, ${(constantValues[arg2] >>> 16).toString(10)}`)
-            this.asm.push(`ori ${offsetReg} ${(constantValues[arg2] & 0xffff).toString(10)}`)
+            this.asm.push(`ori ${offsetReg}, ${targetReg}, ${(constantValues[arg2] & 0xffff).toString(10)}`)
           }
           else {
             this.asm.push(`addi ${offsetReg}, $zero, ${constantValues[arg2]}`)
@@ -467,7 +468,7 @@ export class AsmGenerator {
         if (constantValues[arg1]) {
           if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
             this.asm.push(`lui ${sourceReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
-            this.asm.push(`ori ${sourceReg} ${(constantValues[arg1] & 0xffff).toString(10)}`)
+            this.asm.push(`ori ${sourceReg}, ${sourceReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
           }
           else {
             this.asm.push(`addi ${sourceReg}, $zero, ${constantValues[arg1]}`)
@@ -552,7 +553,7 @@ export class AsmGenerator {
           if (constantValues[argumentList[index]] !== undefined) {
             if (constantValues[argumentList[index]] > 32767 || constantValues[argumentList[index]] < -32768) {
               this.asm.push(`lui $a${index}, ${(constantValues[argumentList[index]] >>> 16).toString(10)}`)
-              this.asm.push(`ori $a${index}, ${(constantValues[argumentList[index]] & 0xffff).toString(10)}`)
+              this.asm.push(`ori $a${index}, ${index}, ${(constantValues[argumentList[index]] & 0xffff).toString(10)}`)
             }
             else {
               this.asm.push(`addi $a${index}, $zero, ${constantValues[argumentList[index]]}`)
@@ -638,7 +639,7 @@ export class AsmGenerator {
         if (constantValues[arg1]) {
           if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
             this.asm.push(`lui ${sourceReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
-            this.asm.push(`ori ${sourceReg} ${(constantValues[arg1] & 0xffff).toString(10)}`)
+            this.asm.push(`ori ${sourceReg}, ${sourceReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
           }
           else {
             this.asm.push(`addi ${sourceReg}, $zero, ${constantValues[arg1]}`)
@@ -679,7 +680,7 @@ export class AsmGenerator {
         const regId = Object.entries(this.registerDescriptors).find(v => v[1].has(arg1))
         // 如果是常数，直接跳
         if (constantValues[arg1]) {
-          if (constantValues[arg1] !== 0)
+          if (constantValues[arg1] === 0)
             this.asm.push(`j ${result}`)
         }
         // 如果已经加载到寄存器
@@ -856,7 +857,7 @@ export class AsmGenerator {
                 const rightReg = this.getARegister(arg2, true)
                 if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
                   this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
-                  this.asm.push(`ori ${targetReg} ${(constantValues[arg1] & 0xffff).toString(10)}`)
+                  this.asm.push(`ori ${targetReg}, ${targetReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
                 }
                 else {
                   this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg1]}`)
@@ -898,7 +899,7 @@ export class AsmGenerator {
                 const rightReg = this.getARegister(arg2, true)
                 if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
                   this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
-                  this.asm.push(`ori ${targetReg} ${(constantValues[arg1] & 0xffff).toString(10)}`)
+                  this.asm.push(`ori ${targetReg}, ${targetReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
                 }
                 else {
                   this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg1]}`)
@@ -934,7 +935,7 @@ export class AsmGenerator {
                 const rightReg = this.getARegister(arg2, true)
                 if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
                   this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
-                  this.asm.push(`ori ${targetReg} ${(constantValues[arg1] & 0xffff).toString(10)}`)
+                  this.asm.push(`ori ${targetReg}, ${targetReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
                 }
                 else {
                   this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg1]}`)
@@ -970,7 +971,7 @@ export class AsmGenerator {
                 const rightReg = this.getARegister(arg2, true)
                 if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
                   this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
-                  this.asm.push(`ori ${targetReg} ${(constantValues[arg1] & 0xffff).toString(10)}`)
+                  this.asm.push(`ori ${targetReg}, ${targetReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
                 }
                 else {
                   this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg1]}`)
@@ -1005,7 +1006,7 @@ export class AsmGenerator {
                 const rightReg = this.getARegister(arg2, true)
                 if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
                   this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
-                  this.asm.push(`ori ${targetReg} ${(constantValues[arg1] & 0xffff).toString(10)}`)
+                  this.asm.push(`ori ${targetReg}, ${targetReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
                 }
                 else {
                   this.asm.push(`addi ${targetReg}, $zero, ${constantValues[arg1]}`)
@@ -1071,7 +1072,8 @@ export class AsmGenerator {
               const targetReg = this.getARegister(arg1, false)
               const resultReg = this.getARegister(result, false)
               this.asm.push(`lui ${targetReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
-              this.asm.push(`lw ${resultReg}, ${constantValues[arg1] & 0xffff}(${targetReg})`)
+              this.asm.push(`ori ${targetReg}, ${targetReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
+              this.asm.push(`lw ${resultReg}, 0(${targetReg})`)
             }
             else {
               const targetReg = this.getARegister(arg1, true)
