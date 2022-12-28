@@ -1,5 +1,5 @@
 import { IRArray } from "../IR/IRArray";
-import { IRGenerator } from "../IR/IRGenerator";
+import type { IRGenerator } from "../IR/IRGenerator";
 import { IRVarialble } from "../IR/IRVariable";
 
 type StackFrameType = {
@@ -331,7 +331,7 @@ export class AsmGenerator {
       }
       else if (op === 'assignMem') {
         const sourceReg = this.getARegister(arg1, true)
-        if (constantValues[arg1]) {
+        if (constantValues[arg1] !== undefined) {
           if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
             this.asm.push(`lui ${sourceReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
             this.asm.push(`ori ${sourceReg}, ${sourceReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
@@ -451,7 +451,7 @@ export class AsmGenerator {
       else if (op === 'readArray') {
         const targetReg = this.getARegister(result)
         const offsetReg = this.getARegister(arg2)
-        if (constantValues[arg2]) {
+        if (constantValues[arg2] !== undefined) {
           if (constantValues[arg2] > 32767 || constantValues[arg2] < -32768) {
             this.asm.push(`lui ${offsetReg}, ${(constantValues[arg2] >>> 16).toString(10)}`)
             this.asm.push(`ori ${offsetReg}, ${targetReg}, ${(constantValues[arg2] & 0xffff).toString(10)}`)
@@ -465,7 +465,7 @@ export class AsmGenerator {
       else if (op === 'assignArray') {
         const sourceReg = this.getARegister(arg1)
         const offsetReg = this.getARegister(arg2)
-        if (constantValues[arg1]) {
+        if (constantValues[arg1] !== undefined) {
           if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
             this.asm.push(`lui ${sourceReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
             this.asm.push(`ori ${sourceReg}, ${sourceReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
@@ -599,9 +599,15 @@ export class AsmGenerator {
             // 如果是常数，直接加载
             // TODO
             if (constantValues[argumentList[j]] !== undefined) {
-              this.asm.push(`sw `)
-            }
-            else {
+              const targetReg = this.getARegister(argumentList[j])
+              if (constantValues[argumentList[j]] > 32767 || constantValues[argumentList[j]] < -32768) {
+                this.asm.push(`lui ${targetReg}, ${(constantValues[argumentList[j]] >>> 16).toString(10)}`)
+                this.asm.push(`ori $a${targetReg}, ${j}, ${(constantValues[argumentList[j]] & 0xffff).toString(10)}`)
+              }
+              else {
+                this.asm.push(`addi $a${targetReg}, $zero, ${constantValues[argumentList[j]]}`)
+              }
+              this.asm.push(`sw ${targetReg}, ${(j + 1) * 4}($sp)`)
               // 如果标号已经在某个寄存器
               let findedRegister: string | undefined = undefined
               let memoryAddress = ''
@@ -636,7 +642,7 @@ export class AsmGenerator {
       }
       else if (op === 'returnExpr') {
         const sourceReg = this.getARegister(arg1, true)
-        if (constantValues[arg1]) {
+        if (constantValues[arg1] !== undefined) {
           if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
             this.asm.push(`lui ${sourceReg}, ${(constantValues[arg1] >>> 16).toString(10)}`)
             this.asm.push(`ori ${sourceReg}, ${sourceReg}, ${(constantValues[arg1] & 0xffff).toString(10)}`)
@@ -679,13 +685,13 @@ export class AsmGenerator {
         // 看标号位置
         const regId = Object.entries(this.registerDescriptors).find(v => v[1].has(arg1))
         // 如果是常数，直接跳
-        if (constantValues[arg1]) {
+        if (constantValues[arg1] !== undefined) {
           if (constantValues[arg1] === 0)
             this.asm.push(`j ${result}`)
         }
         // 如果已经加载到寄存器
         else if (regId) {
-          this.asm.push(`bne ${regId}, $zero, ${result}`)
+          this.asm.push(`bne ${regId[0]}, $zero, ${result}`)
         }
         // 先加载到内存再跳
         else {
@@ -741,13 +747,13 @@ export class AsmGenerator {
         // 看标号位置
         const regId = Object.entries(this.registerDescriptors).find(v => v[1].has(arg1))
         // 如果是常数，直接跳
-        if (constantValues[arg1]) {
+        if (constantValues[arg1] !== undefined) {
           if (constantValues[arg1] === 0)
             this.asm.push(`j ${result}`)
         }
         // 如果是加载到寄存器的数
         else if (regId) {
-          this.asm.push(`bne ${regId}, $zero, ${result}`)
+          this.asm.push(`bne ${regId[0]}, $zero, ${result}`)
         }
         else {
           let ad = ''
@@ -841,7 +847,7 @@ export class AsmGenerator {
             this.addressDescriptors[result] = new Set([`__logical ${op} ${arg1} ${arg2}`])
             break
           case '+':
-            if (constantValues[arg1] && constantValues[arg2]) {
+            if (constantValues[arg1] !== undefined && constantValues[arg2] !== undefined) {
               constantValues[result] = +(constantValues[arg1] + constantValues[arg2])
             }
             else if (constantValues[arg1] && arg2 === '') {
@@ -883,10 +889,10 @@ export class AsmGenerator {
             }
             break
           case '-':
-            if (constantValues[arg1] && constantValues[arg2]) {
+            if (constantValues[arg1] !== undefined && constantValues[arg2] !== undefined) {
               constantValues[result] = +(constantValues[arg1] - constantValues[arg2])
             }
-            else if (constantValues[arg1] && arg2 === '') {
+            else if (constantValues[arg1] !== undefined && arg2 === '') {
               constantValues[result] = -constantValues[arg1]
             }
             else if (arg2 === '') {
@@ -894,7 +900,7 @@ export class AsmGenerator {
               this.registerDescriptors[arg1Reg].add(result)
             }
             else {
-              if (constantValues[arg1] && !constantValues[arg2]) {
+              if (constantValues[arg1] !== undefined && constantValues[arg2] === undefined) {
                 const targetReg = this.getARegister(result)
                 const rightReg = this.getARegister(arg2, true)
                 if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
@@ -907,7 +913,7 @@ export class AsmGenerator {
                 this.asm.push(`sub ${targetReg}, ${targetReg}, ${rightReg}`)
                 this.addressDescriptors[result] = new Set([targetReg])
               }
-              else if (!constantValues[arg1] && constantValues[arg2]) {
+              else if (constantValues[arg1] === undefined && constantValues[arg2] !== undefined) {
                 // TODO: arg2大于16位
                 const leftReg = this.getARegister(arg1, true)
                 const targetReg = this.getARegister(result)
@@ -926,11 +932,11 @@ export class AsmGenerator {
             break
           case 'OR':
           case '|':
-            if (constantValues[arg1] && constantValues[arg2]) {
+            if (constantValues[arg1] !== undefined && constantValues[arg2] !== undefined) {
               constantValues[result] = +(constantValues[arg1] | constantValues[arg2])
             }
             else {
-              if (constantValues[arg1] && !constantValues[arg2]) {
+              if (constantValues[arg1] !== undefined && constantValues[arg2] === undefined) {
                 const targetReg = this.getARegister(result)
                 const rightReg = this.getARegister(arg2, true)
                 if (constantValues[arg1] > 32767 || constantValues[arg1] < -32768) {
@@ -943,7 +949,7 @@ export class AsmGenerator {
                 this.asm.push(`or ${targetReg}, ${targetReg}, ${rightReg}`)
                 this.addressDescriptors[result] = new Set([targetReg])
               }
-              else if (!constantValues[arg1] && constantValues[arg2]) {
+              else if (constantValues[arg1] === undefined && constantValues[arg2] !== undefined) {
                 // TODO: arg2大于16位
                 const leftReg = this.getARegister(arg1, true)
                 const targetReg = this.getARegister(result)
