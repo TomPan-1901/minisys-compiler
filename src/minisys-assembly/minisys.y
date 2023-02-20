@@ -135,6 +135,16 @@ N_ORDERS
     }
     $$attr[0].setSegmentID($attr[0]);
   }
+ | N_SUBSEGID T_ENDL N_ORDER N_ORDERS {
+    let order = $attr[2]
+    if (order instanceof Array) {
+      $$attr = [...order, ...$attr[3]]
+    }
+    else {
+      $$attr = [order, ...$attr[3]]
+    }
+    $$attr[0].setSegmentID($attr[0]);
+  }
  | '' {$$attr = []}
  ;
 

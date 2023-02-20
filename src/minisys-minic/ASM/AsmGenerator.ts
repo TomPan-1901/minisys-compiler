@@ -53,7 +53,9 @@ export class AsmGenerator {
     this.asm.push('.data')
     this.generateGlobalVariables()
     this.asm.push('.text')
-    this.asm.push('start: j __MiniC_Entry_main')
+    this.asm.push('start: lui $0, 0')
+    this.asm.push('lui $sp, 65535')
+    this.asm.push('j __MiniC_Entry_main')
     this.generateTextSegments()
   }
 
@@ -599,15 +601,9 @@ export class AsmGenerator {
             // 如果是常数，直接加载
             // TODO
             if (constantValues[argumentList[j]] !== undefined) {
-              const targetReg = this.getARegister(argumentList[j])
-              if (constantValues[argumentList[j]] > 32767 || constantValues[argumentList[j]] < -32768) {
-                this.asm.push(`lui ${targetReg}, ${(constantValues[argumentList[j]] >>> 16).toString(10)}`)
-                this.asm.push(`ori $a${targetReg}, ${j}, ${(constantValues[argumentList[j]] & 0xffff).toString(10)}`)
-              }
-              else {
-                this.asm.push(`addi $a${targetReg}, $zero, ${constantValues[argumentList[j]]}`)
-              }
-              this.asm.push(`sw ${targetReg}, ${(j + 1) * 4}($sp)`)
+              this.asm.push(`sw `)
+            }
+            else {
               // 如果标号已经在某个寄存器
               let findedRegister: string | undefined = undefined
               let memoryAddress = ''
@@ -1041,16 +1037,40 @@ export class AsmGenerator {
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] * constantValues[arg2])
             }
+            else {
+              const rs = this.getARegister(arg1, true)
+              const rt = this.getARegister(arg2, true)
+              const rd = this.getARegister(result, true)
+              this.asm.push(`mult ${rt}, ${rd}`)
+              this.asm.push(`mflo ${rs}`)
+              this.addressDescriptors[result] = new Set([rd])
+            }
             break
           case '/':
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +Math.floor((constantValues[arg1] / constantValues[arg2]))
+            }
+            else {
+              const rs = this.getARegister(arg1, true)
+              const rt = this.getARegister(arg2, true)
+              const rd = this.getARegister(result, true)
+              this.asm.push(`div ${rt}, ${rd}`)
+              this.asm.push(`mflo ${rs}`)
+              this.addressDescriptors[result] = new Set([rd])
             }
             break
           case '%':
             // TODO
             if (constantValues[arg1] && constantValues[arg2]) {
               constantValues[result] = +(constantValues[arg1] % constantValues[arg2])
+            }
+            else {
+              const rs = this.getARegister(arg1, true)
+              const rt = this.getARegister(arg2, true)
+              const rd = this.getARegister(result, true)
+              this.asm.push(`div ${rt}, ${rd}`)
+              this.asm.push(`mfhi ${rs}`)
+              this.addressDescriptors[result] = new Set([rd])
             }
             break
           case 'LSHIFT':
